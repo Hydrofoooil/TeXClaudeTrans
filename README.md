@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 English | [中文](README_ZH.md)
 
@@ -47,7 +47,17 @@ LaTeXTrans is a structured LaTeX document translation system based on multi-agen
 ```bash
 git clone https://github.com/PolarisZZM/LaTeXTrans.git
 cd LaTeXTrans
-pip install -r requirements.txt
+pip install -e .
+```
+
+#### (Optional) Use Conda Environment
+
+```bash
+conda create -n latextrans python=3.10 -y
+conda activate latextrans
+git clone https://github.com/PolarisZZM/LaTeXTrans.git
+cd LaTeXTrans
+pip install -e .
 ```
 
 #### 2. Install MikTex(Recommended) or TeXLive
@@ -91,9 +101,9 @@ The following example shows the recommended base_url for different models:
 Simply provide an arXiv paper ID to complete translation:
 
 ```bash
-python main.py --arxiv ${xxxx}
+latextrans --arxiv ${xxxx}
 # For example, 
-# python main.py --arxiv 2508.18791
+# latextrans --arxiv 2508.18791
 ```
 
 This command will:
@@ -101,6 +111,37 @@ This command will:
 1. Download the LaTeX source code from arXiv and extract it
 2. Execute a workflow consisting of parsing, translation, refactoring and compilation
 3. Save the translated LaTeX project file of the paper and the PDF of the compiled translation in the outputs folder
+
+### Batch Translation via ArXiv IDs
+
+You can translate multiple arXiv papers in one run (comma-separated):
+
+```bash
+latextrans --arxiv ${xxxx}, ${xxxx}
+```
+
+### Translation via Local Project
+
+You can also pass a local compressed source package directly:
+
+```bash
+latextrans --project D:\\path\\to\\paper_source.tar.gz
+```
+
+Or pass a local extracted project directory:
+
+```bash
+latextrans --project D:\\path\\to\\paper_project_dir
+```
+
+When you provide `--arxiv` or `--project`, LaTeXTrans only processes those explicit inputs.
+Existing folders under `tex source` are ignored in this mode.
+
+To process every existing project under `tex source`, run:
+
+```bash
+latextrans --all-existing
+```
 
  > [!NOTE]
 Although LaTeXTrans supports translation from any language to any language, the current version has only made relatively complete compilation adaptations for translation from English to Chinese. When translating to other languages, the final output pdf may contain errors. We welcome you to raise an issue to describe the problem you have encountered, and we will solve it case by case.

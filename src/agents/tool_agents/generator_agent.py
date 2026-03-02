@@ -5,7 +5,7 @@ import sys
 import os
 import shutil
 
-import streamlit as st
+from src.utils.progress import st
 import time
 
 base_dir = os.getcwd()

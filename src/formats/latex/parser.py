@@ -3,7 +3,7 @@ from .utils import *
 import tiktoken
 import sys
 
-import streamlit as st
+from src.utils.progress import st
 
 
 class LatexParser:

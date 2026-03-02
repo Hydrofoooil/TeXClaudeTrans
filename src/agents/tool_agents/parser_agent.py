@@ -6,7 +6,6 @@ import sys
 import os
 import requests
 import time
-from tqdm import tqdm
 
 base_dir = os.getcwd()
 sys.path.append(base_dir)
@@ -46,7 +45,10 @@ class ParserAgent(BaseToolAgent):
                         env["placeholder"]: i for i, env in enumerate(latex_parser.envs_json)
                     }
             
-            for env in tqdm(env_need_trans, desc=f"Setting need trans", total=len(env_need_trans), unit="env"):
+            total_envs = len(env_need_trans)
+            for idx, env in enumerate(env_need_trans, start=1):
+                if idx == 1 or idx == total_envs or idx % 10 == 0:
+                    print(f"Setting need_trans: {idx}/{total_envs}")
                 i = placeholder_to_index.get(env["placeholder"])
                 if i is not None:
                     latex_parser.envs_json[i]["need_trans"] = self._request_llm_for_judge(

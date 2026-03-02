@@ -8,21 +8,44 @@ import re
 import json
 import zipfile
 import tarfile
-from tqdm import tqdm
 import regex
 import subprocess
 import os
 import requests
 from bs4 import BeautifulSoup
-from tqdm import tqdm
 from typing import List
 import time
-import streamlit as st
+from src.utils.progress import st
 import sys
+from pathlib import Path
 
 options = r"\[[^\[\]]*?\]"
 spaces = r"[ \t]*"
 get_pattern_brace = lambda index: rf"\{{((?:[^{{}}]++|(?{index}))*+)\}}"
+
+
+def _is_within_dir(base_dir: Path, target_path: Path) -> bool:
+    try:
+        target_path.resolve().relative_to(base_dir.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _safe_extract_zip(zip_ref: zipfile.ZipFile, extract_path: Path) -> None:
+    for member in zip_ref.infolist():
+        member_path = extract_path / member.filename
+        if not _is_within_dir(extract_path, member_path):
+            raise ValueError(f"Unsafe zip member path: {member.filename}")
+    zip_ref.extractall(extract_path)
+
+
+def _safe_extract_tar(tar_ref: tarfile.TarFile, extract_path: Path) -> None:
+    for member in tar_ref.getmembers():
+        member_path = extract_path / member.name
+        if not _is_within_dir(extract_path, member_path):
+            raise ValueError(f"Unsafe tar member path: {member.name}")
+    tar_ref.extractall(extract_path)
 
 def get_pattern_command_full(name, n=None):
     pattern = rf'\\({name})'
@@ -51,22 +74,23 @@ def extract_compressed_files(folder_path):
     for root, _, files in os.walk(folder_path):
         for file in files:
             file_path = os.path.join(root, file)
-            if zipfile.is_zipfile(file_path):
-                with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                    extract_path = os.path.join(root, file.replace('.zip', ''))
-                    zip_ref.extractall(extract_path)
-                    print(f"Extracted {file} to {extract_path}")
-                    # paths.append(extract_path)
-                os.remove(file_path)
-                # print(f"Deleted source file: {file_path}")
-            elif tarfile.is_tarfile(file_path):
-                with tarfile.open(file_path, 'r:*') as tar_ref:
-                    extract_path = os.path.join(root, file.replace('.tar', '').replace('.gz', ''))
-                    tar_ref.extractall(extract_path)
-                    print(f"Extracted {file} to {extract_path}")
-                    # paths.append(extract_path)
-                os.remove(file_path)
-                # print(f"Deleted source file: {file_path}")
+            try:
+                if zipfile.is_zipfile(file_path):
+                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                        extract_path = Path(root) / file.replace('.zip', '')
+                        extract_path.mkdir(parents=True, exist_ok=True)
+                        _safe_extract_zip(zip_ref, extract_path)
+                        print(f"Extracted {file} to {extract_path}")
+                    os.remove(file_path)
+                elif tarfile.is_tarfile(file_path):
+                    with tarfile.open(file_path, 'r:*') as tar_ref:
+                        extract_path = Path(root) / file.replace('.tar', '').replace('.gz', '')
+                        extract_path.mkdir(parents=True, exist_ok=True)
+                        _safe_extract_tar(tar_ref, extract_path)
+                        print(f"Extracted {file} to {extract_path}")
+                    os.remove(file_path)
+            except Exception as e:
+                print(f"[SKIP] Failed to extract {file_path}: {e}")
     # return paths
 
 def get_profect_dirs(folder_path):
@@ -360,7 +384,9 @@ def get_texts_from_data(folder_path, output_folder):
     extract_compressed_files(folder_path)
     projects = get_profect_dirs(folder_path)
     # print("projects:", projects)
-    for project in tqdm(projects, desc="Processing projects", unit="project"):
+    total_projects = len(projects)
+    for idx, project in enumerate(projects, start=1):
+        print(f"[{idx}/{total_projects}] Processing {os.path.basename(project)}")
         try:
             text = extract_pure_text(project)
             project_name = os.path.basename(project)
@@ -731,38 +757,38 @@ def download_tex(arxiv_id: str, tex_url: str, save_dir: str, headers: dict):
             status_text = st.empty()
             sys.stderr = sys.__stderr__
 
-            with open(file_path, "wb") as f, tqdm(
-                desc=f"Download: {arxiv_id}",
-                total=total_size,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
+            last_report_ts = 0.0
+            with open(file_path, "wb") as f:
+                downloaded = 0
                 for chunk in r.iter_content(8192):
                     if chunk:
                         f.write(chunk)
-                        bar.update(len(chunk))
+                        downloaded += len(chunk)
 
-                         # 更新Streamlit进度条
+                        # Update with throttling to avoid noisy terminal output.
                         if total_size > 0:
-                            sys.stderr = open(os.devnull, 'w')
-                            progress = bar.n / total_size
-                            st_progress.progress(progress)
-                            status_text.text(f"下载进度: {bar.n/1024/1024:.2f}MB / {total_size/1024/1024:.2f}MB")
-                            sys.stderr = sys.__stderr__
+                            now = time.time()
+                            if now - last_report_ts >= 0.5 or downloaded == total_size:
+                                sys.stderr = open(os.devnull, 'w')
+                                progress = downloaded / total_size
+                                st_progress.progress(progress)
+                                status_text.text(
+                                    f"Downloading {arxiv_id}: {downloaded/1024/1024:.2f}MB / {total_size/1024/1024:.2f}MB"
+                                )
+                                sys.stderr = sys.__stderr__
+                                last_report_ts = now
             
         sys.stderr = open(os.devnull, 'w')
         st.success(f"[SUCCESS] {arxiv_id} successfully downloaded to {file_path}.")
         sys.stderr = sys.__stderr__
 
-        print(f"[SUCCESS] {arxiv_id} successfully downloaded to {file_path}.")    
         return os.path.join(save_dir, f"{arxiv_id}")
 
     except requests.RequestException as e:
         sys.stderr = open(os.devnull, 'w')
         st.error(f"[FAIL] {arxiv_id} download failed: {e}")
         sys.stderr = sys.__stderr__
-        print(f"[FAIL] {arxiv_id} download failed: {e}")
+        return None
 
 def batch_download_arxiv_tex(arxiv_ids: List[str], save_dir: str = "./tex_sources"):
     """
@@ -779,7 +805,10 @@ def batch_download_arxiv_tex(arxiv_ids: List[str], save_dir: str = "./tex_source
         tex_url = get_tex_url(arxiv_id, headers)
         if tex_url:
             dir = download_tex(arxiv_id, tex_url, save_dir, headers)
-            source_dirs.append(dir)
+            if dir:
+                source_dirs.append(dir)
+            else:
+                print(f"[SKIP] Source download failed for {arxiv_id}, skip TeX processing.")
         else:
             print(f"[SKIP] No TeX source found for {arxiv_id}. Please check the arXiv ID or the availability of the source.")
 
@@ -796,12 +825,10 @@ def batch_download_arxiv_tex(arxiv_ids: List[str], save_dir: str = "./tex_source
             sys.stderr = open(os.devnull, 'w')
             st.success(f"[SUCCESS] Downloaded PDF for {arxiv_id}")
             sys.stderr = sys.__stderr__
-            print(f"[SUCCESS] Downloaded PDF for {arxiv_id}")
         except Exception as e:
             sys.stderr = open(os.devnull, 'w')
-            st.success(f"[ERROR] Failed to download PDF for {arxiv_id}: {str(e)}")
+            st.error(f"[ERROR] Failed to download PDF for {arxiv_id}: {str(e)}")
             sys.stderr = sys.__stderr__
-            print(f"[ERROR] Failed to download PDF for {arxiv_id}: {str(e)}")
 
     return source_dirs
 

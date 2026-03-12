@@ -868,10 +868,10 @@ def get_arxiv_category(arxiv_ids: List[str]) -> dict:
 
 def is_valid_arxiv_id(id_str):
     # 现代格式：YYYY.NNNNN 或 YYYY.NNNNNNN
-    if re.match(r'^\d{4}\.\d{5,7}$', id_str):
+    if re.match(r'^\d{4}\.\d{5,7}(?:v\d+)?$', id_str):
         return True
     # 旧格式：学科分类/YYMMNNN（如 hep-th/9901001）
-    if re.match(r'^[\w\-]+/\d{7}$', id_str):
+    if re.match(r'^[\w\-]+/\d{7}(?:v\d+)?$', id_str):
         return True
     return False
 
@@ -882,7 +882,7 @@ def extract_arxiv_ids(arxiv_list):
             ids.append(item)
             continue
 
-        url_pattern = r'(?:arxiv\.org/)(?:abs|pdf|e-print)/([\w\-]+/\d{7}|\d{4}\.\d{5,7})(?:\.pdf)?'
+        url_pattern = r'(?:arxiv\.org/)(?:abs|pdf|e-print)/([\w\-]+/\d{7}(?:v\d+)?|\d{4}\.\d{5,7}(?:v\d+)?)(?:\.pdf)?'
         match = re.search(url_pattern, item)
         if match:
             ids.append(match.group(1))
@@ -895,7 +895,7 @@ def extract_arxiv_ids_V2(item):
         ids = item
 
     else:
-        url_pattern = r'(?:arxiv\.org/)(?:abs|pdf|e-print)/([\w\-]+/\d{7}|\d{4}\.\d{5,7})(?:\.pdf)?'
+        url_pattern = r'(?:arxiv\.org/)(?:abs|pdf|e-print)/([\w\-]+/\d{7}(?:v\d+)?|\d{4}\.\d{5,7}(?:v\d+)?)(?:\.pdf)?'
         match = re.search(url_pattern, item)
         if match:
             ids = match.group(1)

@@ -104,12 +104,20 @@ latextrans --arxiv ${xxxx}
 # latextrans --arxiv 2508.18791
 ```
 
+现在也支持带版本号的 arXiv ID，可以指定论文的具体修订版本：
+
+```bash
+latextrans --arxiv 2508.18791v2
+```
+
 ### 批量翻译 ArXiv 论文
 
 支持逗号分隔的多个 arXiv ID：
 
 ```bash
 latextrans --arxiv ${xxxx}, ${xxxx}
+# For example,
+# latextrans --arxiv 2508.18791v2, 2407.01648
 ```
 
 ### 翻译本地项目

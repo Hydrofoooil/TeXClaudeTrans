@@ -106,6 +106,12 @@ latextrans --arxiv ${xxxx}
 # latextrans --arxiv 2508.18791
 ```
 
+Versioned arXiv IDs are also supported, so you can target a specific revision:
+
+```bash
+latextrans --arxiv 2508.18791v2
+```
+
 This command will:
 
 1. Download the LaTeX source code from arXiv and extract it
@@ -118,6 +124,8 @@ You can translate multiple arXiv papers in one run (comma-separated):
 
 ```bash
 latextrans --arxiv ${xxxx}, ${xxxx}
+# For example,
+# latextrans --arxiv 2508.18791v2, 2407.01648
 ```
 
 ### Translation via Local Project

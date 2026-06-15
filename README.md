@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./logo.png" width="760px"></img>
+<img src="./logo.png"></img>
 
 **把 arXiv / LaTeX 论文端到端翻译成保留排版的多语言 PDF**
 

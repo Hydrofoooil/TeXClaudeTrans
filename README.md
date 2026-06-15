@@ -18,7 +18,7 @@
 
 # 📖 简介
 
-LaTeXTrans 是一个基于多智能体协作的**结构化 LaTeX 文档翻译系统**。它直接翻译 LaTeX 源码并生成高度还原原排版的译文 PDF。与传统的 PDF 翻译不同，它不会破坏公式与版式，而是把 LaTeX 源码解析成结构化的 JSON 中间表示，只把其中的自然语言部分交给大模型翻译，再校验 LaTeX 完整性、重建并编译出译文项目。
+TeXClaudeTrans 是一个基于多智能体协作的**结构化 LaTeX 文档翻译系统**。它直接翻译 LaTeX 源码并生成高度还原原排版的译文 PDF。与传统的 PDF 翻译不同，它不会破坏公式与版式，而是把 LaTeX 源码解析成结构化的 JSON 中间表示，只把其中的自然语言部分交给大模型翻译，再校验 LaTeX 完整性、重建并编译出译文项目。
 
 **核心特点：**
 - 🌟 **保持公式、版式、交叉引用的完整性**
@@ -171,7 +171,7 @@ latextrans-gui
 
 # 🙏 致谢
 
-本项目基于 [NiuTrans/LaTeXTrans](https://github.com/NiuTrans/LaTeXTrans)。感谢原作者团队的工作。
+本项目基于 [NiuTrans/LaTeXTrans](https://github.com/NiuTrans/LaTeXTrans)。
 
 ```bibtex
 @article{zhu2025latextrans,

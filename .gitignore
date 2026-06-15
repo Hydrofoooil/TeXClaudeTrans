@@ -16,9 +16,14 @@ env/
 tex source/
 outputs/
 
+# GUI 记住的上次设置（本地状态，不入库）
+config/.gui_state.json
+
 # 杂项
 *.log
 missfont.log
 .DS_Store
+*:Zone.Identifier
+*Zone.Identifier
 .idea/
 .vscode/

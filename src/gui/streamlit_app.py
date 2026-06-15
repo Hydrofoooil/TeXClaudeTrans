@@ -1,4 +1,6 @@
 import io
+import json
+import os
 import re
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
@@ -160,6 +162,34 @@ def _load_defaults(config_path: str) -> Dict[str, Any]:
         return {}
 
 
+# 记住上次的侧边栏设置（点 Start 时保存，下次打开自动回填）。不保存 API Key（敏感）。
+_GUI_STATE_PATH = "config/.gui_state.json"
+_GUI_STATE_KEYS = (
+    "backend", "model", "effort", "url", "source", "output",
+    "source_language", "target_language", "mode", "update_term",
+    "user_term", "user_prompt_file",
+)
+
+
+def _load_gui_state() -> Dict[str, Any]:
+    try:
+        with open(_GUI_STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_gui_state(params: Dict[str, Any]) -> None:
+    state = {k: params[k] for k in _GUI_STATE_KEYS if k in params}
+    try:
+        os.makedirs(os.path.dirname(_GUI_STATE_PATH), exist_ok=True)
+        with open(_GUI_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 def _ensure_session_state() -> None:
     streamlit_backend.session_state.setdefault("job_history", [])
     streamlit_backend.session_state.setdefault("retry_failed_only", False)
@@ -212,12 +242,28 @@ def _inject_style() -> None:
 
 
 def _sidebar_form(defaults: Dict[str, Any]) -> Dict[str, Any]:
+    # 上次保存的设置优先作为各控件初始值（覆盖 config 默认）。
+    saved = _load_gui_state()
+    if saved:
+        defaults = dict(defaults)
+        llm = dict(defaults.get("llm_config", {}))
+        for sk, lk in (("backend", "backend"), ("model", "model"), ("effort", "effort"), ("url", "base_url")):
+            if sk in saved:
+                llm[lk] = saved[sk]
+        defaults["llm_config"] = llm
+        for sk, ck in (("source", "tex_sources_dir"), ("output", "output_dir"),
+                       ("source_language", "source_language"), ("target_language", "target_language"),
+                       ("update_term", "update_term"), ("user_term", "user_term"),
+                       ("user_prompt_file", "user_prompt_file")):
+            if sk in saved:
+                defaults[ck] = saved[sk]
+
     llm_defaults = defaults.get("llm_config", {})
     streamlit_backend.sidebar.header("Run Configuration")
     config_path = streamlit_backend.sidebar.text_input("Config Path", "config/default.toml")
     source_language = streamlit_backend.sidebar.text_input("Source Language", defaults.get("source_language", "en"))
     target_language = streamlit_backend.sidebar.text_input("Target Language", defaults.get("target_language", "ch"))
-    backend_options = ["api", "claude_code"]
+    backend_options = ["api", "claude_code", "codex"]
     default_backend = (llm_defaults.get("backend") or "api").strip().lower()
     backend_index = backend_options.index(default_backend) if default_backend in backend_options else 0
     backend = streamlit_backend.sidebar.selectbox(
@@ -227,39 +273,33 @@ def _sidebar_form(defaults: Dict[str, Any]) -> Dict[str, Any]:
         help=(
             "api: OpenAI-compatible HTTP endpoint (fill Model / Base URL / API Key). "
             "claude_code: local claude CLI using your Claude Code login — Model is an alias "
-            "like opus/sonnet (empty = default), Base URL / API Key are ignored."
+            "like opus/sonnet (empty = default), Base URL / API Key are ignored. "
+            "codex: local OpenAI codex CLI using your ChatGPT login — Model is a codex model "
+            "name (empty = default), Base URL / API Key are ignored."
         ),
     )
+    model = streamlit_backend.sidebar.text_input("Model", llm_defaults.get("model", ""))
     effort = ""
-    if backend == "claude_code":
-        model_options = ["", "opus", "sonnet", "haiku", "fable"]
-        default_model = (llm_defaults.get("model") or "").strip()
-        model_index = model_options.index(default_model) if default_model in model_options else 0
-        model = streamlit_backend.sidebar.selectbox(
-            "Model",
-            model_options,
-            index=model_index,
-            format_func=lambda x: x or "(CLI default)",
-            help="claude CLI model alias. Empty = your Claude Code default.",
+    if backend in ("claude_code", "codex"):
+        effort_help = (
+            "claude --effort: low / medium / high / xhigh / max (empty = model default)."
+            if backend == "claude_code"
+            else "codex reasoning effort: minimal / low / medium / high (empty = model default)."
         )
-        effort_options = ["", "low", "medium", "high", "xhigh", "max"]
-        default_effort = (llm_defaults.get("effort") or "").strip()
-        effort_index = effort_options.index(default_effort) if default_effort in effort_options else 0
-        effort = streamlit_backend.sidebar.selectbox(
+        effort = streamlit_backend.sidebar.text_input(
             "Reasoning effort",
-            effort_options,
-            index=effort_index,
-            format_func=lambda x: x or "(default)",
-            help="claude --effort level. Higher = more reasoning (slower). Empty = model default.",
-        )
-    else:
-        model = streamlit_backend.sidebar.text_input("Model", llm_defaults.get("model", ""))
+            llm_defaults.get("effort", ""),
+            help=effort_help,
+        ).strip()
     base_url = streamlit_backend.sidebar.text_input("Base URL", llm_defaults.get("base_url", ""))
     api_key = streamlit_backend.sidebar.text_input("API Key", llm_defaults.get("api_key", ""), type="password")
     tex_source_dir = streamlit_backend.sidebar.text_input("TeX Source Dir", defaults.get("tex_sources_dir", "tex source"))
     output_dir = streamlit_backend.sidebar.text_input("Output Dir", defaults.get("output_dir", "outputs"))
     mode_options = {"0 - Normal": 0, "1 - Retry Errors": 1, "2 - Alt": 2}
-    selected_mode = streamlit_backend.sidebar.selectbox("Mode", list(mode_options.keys()), index=0)
+    mode_keys = list(mode_options.keys())
+    saved_mode = saved.get("mode") if saved else None
+    mode_index = next((i for i, k in enumerate(mode_keys) if mode_options[k] == saved_mode), 0)
+    selected_mode = streamlit_backend.sidebar.selectbox("Mode", mode_keys, index=mode_index)
     update_term = streamlit_backend.sidebar.checkbox(
         "Update Terms",
         value=str(defaults.get("update_term", "False")) == "True",
@@ -652,6 +692,7 @@ def main() -> None:
             if not config_candidate.exists():
                 streamlit_backend.error(f"Config file not found: {params['config_path']}")
             else:
+                _save_gui_state(params)  # 记住本次侧边栏设置，下次打开自动回填
                 _run_streamlit_job(params=params, inputs=inputs, title="Current Run")
 
     _render_history()

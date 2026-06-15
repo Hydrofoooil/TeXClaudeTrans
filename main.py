@@ -108,9 +108,9 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="config/default.toml", help="Path to the config TOML file.")
-    parser.add_argument("--backend", type=str, default="", choices=["", "api", "claude_code"], help="Translation backend: 'api' or 'claude_code'.")
+    parser.add_argument("--backend", type=str, default="", choices=["", "api", "claude_code", "codex"], help="Translation backend: 'api', 'claude_code', or 'codex'.")
     parser.add_argument("--model", type=str, default="", help="Model for translating.")
-    parser.add_argument("--effort", type=str, default="", choices=["", "low", "medium", "high", "xhigh", "max"], help="Reasoning effort for claude_code backend.")
+    parser.add_argument("--effort", type=str, default="", help="Reasoning effort: claude_code uses low/medium/high/xhigh/max; codex uses minimal/low/medium/high.")
     parser.add_argument("--url", type=str, default="", help="Model url.")
     parser.add_argument("--key", type=str, default="", help="Model key.")
     parser.add_argument("--arxiv", nargs="+", default=[], help="arXiv ID(s), comma-separated.")

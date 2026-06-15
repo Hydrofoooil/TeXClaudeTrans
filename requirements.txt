@@ -1,3 +1,8 @@
+# Python 依赖（pip 安装）。
+# 系统级依赖（非 pip，按需用系统包管理器安装）：
+#   - TeX 发行版（pdflatex/xelatex）—— 编译 PDF 必需，见 README
+#   - bubblewrap —— 可选，仅 codex 后端沙盒会用；不装则 codex 用内置的
+#     Debian/Ubuntu/WSL: sudo apt install bubblewrap
 beautifulsoup4==4.13.4
 pylatexenc==2.10
 PyYAML==6.0.2

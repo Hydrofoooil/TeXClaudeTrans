@@ -65,6 +65,21 @@ pip install -r requirements.txt
 claude --version
 ```
 
+### 5.（仅 codex 后端）安装并登录 OpenAI Codex CLI
+
+如果要用本地 codex 翻译（复用 ChatGPT 订阅、免 API key），安装 codex CLI 并登录：
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh   # 独立二进制，不依赖 Node
+codex login                                            # 用 ChatGPT 账号登录
+codex --version
+```
+
+> 可选：装系统沙盒工具 `bubblewrap`（**不是 pip 包，用系统包管理器装**）让 codex 的只读沙盒更规范；不装也能用（codex 会用内置的）：
+> ```bash
+> sudo apt install bubblewrap     # Debian/Ubuntu/WSL
+> ```
+
 # ⚙️ 配置
 
 编辑 `config/default.toml`：

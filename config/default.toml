@@ -15,12 +15,13 @@ user_term = ""
 user_prompt_file = ""
 
 [llm_config]
-# Translation backend: "api" (OpenAI-compatible HTTP) or "claude_code" (local claude CLI).
+# Translation backend: "api" (OpenAI-compatible HTTP), "claude_code" (local claude CLI),
+# or "codex" (local OpenAI codex CLI; reuses your ChatGPT login, no API key).
 backend = "api"
 # For backend = "api": model name (e.g. deepseek-chat / gpt-4o), plus api_key and base_url.
 # For backend = "claude_code": model is a claude alias (e.g. opus / sonnet); leave empty for
 # the CLI default. api_key / base_url are ignored (uses your local Claude Code login).
-# effort (claude_code only): reasoning effort — "" / low / medium / high / xhigh / max.
+# effort: reasoning effort. claude_code → low/medium/high/xhigh/max; codex → minimal/low/medium/high.
 model = ""
 effort = ""
 api_key = ""

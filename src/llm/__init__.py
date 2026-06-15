@@ -3,8 +3,9 @@ from typing import Any, Dict
 from .api_backend import ApiBackend
 from .base import LLMBackend, LLMBackendError
 from .claude_code_backend import ClaudeCodeBackend
+from .codex_backend import CodexBackend
 
-__all__ = ["LLMBackend", "LLMBackendError", "ApiBackend", "ClaudeCodeBackend", "create_backend"]
+__all__ = ["LLMBackend", "LLMBackendError", "ApiBackend", "ClaudeCodeBackend", "CodexBackend", "create_backend"]
 
 
 def create_backend(config: Dict[str, Any]) -> LLMBackend:
@@ -30,6 +31,16 @@ def create_backend(config: Dict[str, Any]) -> LLMBackend:
         if llm_cfg.get("concurrency"):
             kwargs["max_concurrency"] = int(llm_cfg["concurrency"])
         return ClaudeCodeBackend(**kwargs)
+
+    if backend == "codex":
+        kwargs = {}
+        if llm_cfg.get("model"):
+            kwargs["model"] = llm_cfg["model"]
+        if llm_cfg.get("effort"):
+            kwargs["effort"] = llm_cfg["effort"]
+        if llm_cfg.get("concurrency"):
+            kwargs["max_concurrency"] = int(llm_cfg["concurrency"])
+        return CodexBackend(**kwargs)
 
     kwargs = {
         "model": llm_cfg.get("model", "gpt-4o"),

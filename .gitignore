@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.so
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# LaTeXTrans 工作目录：下载的 arXiv 源码 / 翻译产物，都是生成物，不入库
+tex source/
+outputs/
+
+# 杂项
+*.log
+missfont.log
+.DS_Store
+.idea/
+.vscode/

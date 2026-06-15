@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from src.agents.tool_agents.base_tool_agent import BaseToolAgent
 import src.formats.latex.prompts as pm
+from src.llm import create_backend, LLMBackendError
 from pathlib import Path
 import sys
 import os
@@ -23,9 +24,12 @@ class ParserAgent(BaseToolAgent):
         self.model = config["llm_config"].get("model", "gpt-4o")
         self.base_url = config["llm_config"].get("base_url", None)
         self.API_KEY = config["llm_config"].get("api_key", None)
+        self.backend = create_backend(config)
 
     def execute(self) -> Any:
         pm.init_prompts(self.config["source_language"], self.config["target_language"])
+        pm.apply_user_prompts(self.config.get("user_prompt_file"), self.config["source_language"], self.config["target_language"])
+        pm.apply_prompt_overrides(self.config.get("prompt_overrides"), self.config["source_language"], self.config["target_language"])
         self.log(f"🤖💬 Starting parsing for project...⏳: {os.path.basename(self.project_dir)}.")
 
         from src.formats.latex.parser import LatexParser
@@ -82,46 +86,32 @@ class ParserAgent(BaseToolAgent):
         """
         Request the api to set need trans for env
         """
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": f"{system_prompt}"
-                },
-                {
-                    "role": "user", 
-                    "content": f"{text}"
-                }
-            ],
-            "temperature": 0,
-            # "max_length": 100000,
-            "max_tokens": 50
-        }
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_prompt}"
+            },
+            {
+                "role": "user",
+                "content": f"{text}"
+            }
+        ]
 
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        
         for attempt in range(1, 4):
             try:
-                response = requests.post(self.base_url, json=payload, headers=headers, timeout=100)
-                response.raise_for_status()  
-                result = response.json()
-                output = result["choices"][0]["message"]["content"].strip()
+                output = self.backend.complete(messages, temperature=0, max_tokens=50).strip().lower()
 
-                if output.lower() == "true":
+                # Tolerate trailing punctuation / wording (e.g. claude may answer "True.").
+                if output.startswith("true"):
                     return True
-                elif output.lower() == "false":
+                elif output.startswith("false"):
                     return False
                 else:
-                    return True                
-            except requests.exceptions.RequestException as e:
+                    return True
+            except (LLMBackendError, requests.exceptions.RequestException) as e:
                 if attempt < 3:
                     print(f"{e}")
-                    time.sleep(3)  
+                    time.sleep(3)
                 else:
                     print(f"⚠️ Failed to Set need trans, set True.")
                     return True

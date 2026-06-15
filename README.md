@@ -1,266 +1,183 @@
 <div align="center">
 
-English | [中文](README_ZH.md)
+<img src="./logo.png" width="760px"></img>
 
+**把 arXiv / LaTeX 论文端到端翻译成保留排版的多语言 PDF**
 
-<img src="./logo.png" width="1000px"></img>
-
-  **Turn arXiv Papers into Multilingual Masterpieces**
-#
-<!-- <p align="center">
-  <a href="https://arxiv.org/abs/2503.06594" alt="paper"><img src="https://img.shields.io/badge/Paper-LaTeXTrans-blue?logo=arxiv&logoColor=white"/></a>
-</p> -->
+中文 | [English (原版)](README_EN.md)
 
 </div>
 
-<div align="center">
-<p dir="auto">
+---
 
-• 📖 [Introduction](#-introduction) 
-• 🛠️ [Installation Guide](#️-installation-guide) 
-• ⚙️ [Configuration Guide](#️-configuration-guide)
-• 📚 [Usage](#-Usage)
-• 🖼️ [Translation Examples](#️-translation-examples) 
+> 本仓库是在 [NiuTrans/LaTeXTrans](https://github.com/NiuTrans/LaTeXTrans) 基础上的**增强版**。
+> 在原有"多智能体结构化 LaTeX 翻译"能力之上，主要新增了三块：
+> 1. **本地 Claude Code 翻译后端** —— 直接调用你本机已登录的 `claude` 命令行来翻译，无需 API key；
+> 2. **可完全自定义的翻译 Prompt** —— 支持配置文件覆盖，并提供图形界面在线编辑、保存、恢复默认；
+> 3. **增强的 Streamlit 图形界面** —— 后端 / 模型 / 推理强度下拉选择、Prompt 编辑器、实时进度与日志。
 
-</p>
-</div>
+# 📖 简介
 
- End-to-end translation from arXiv paper ID to translated PDF. LaTeXTrans have the following **Features** :
- - **🌟 Preserve the integrity of formulas, layout, and cross-references**
- - **🌟 Ensure consistency in terminology translation**
- - **🌟 Support end-to-end conversion from original TeX source (automatically downloaded based on the arXiv paper id provided) to translated PDF**
+LaTeXTrans 是一个基于多智能体协作的**结构化 LaTeX 文档翻译系统**。它直接翻译 LaTeX 源码并生成高度还原原排版的译文 PDF。与传统的 PDF 翻译不同，它不会破坏公式与版式，而是把 LaTeX 源码解析成结构化的 JSON 中间表示，只把其中的自然语言部分交给大模型翻译，再校验 LaTeX 完整性、重建并编译出译文项目。
 
-With LaTeXTrans, researchers and students can obtain higher-quality arXiv paper translations without worrying about formatting confusion or missing content, thus reading and understanding arXiv papers more efficiently.
+**核心特点：**
+- 🌟 **保持公式、版式、交叉引用的完整性**
+- 🌟 **术语翻译的一致性**（可选术语表）
+- 🌟 **端到端**：从 arXiv ID（自动下载源码）一路到译文 PDF
+- 🌟 **两种翻译后端**：OpenAI 兼容 API，或本地 Claude Code（无需 API key）
 
-# 📖 Introduction
+# 🛠️ 安装
 
-LaTeXTrans is a structured LaTeX document translation system based on multi-agent collaboration. It directly translates LaTeX code and generates translated PDFs with high fidelity to the original layout. Unlike traditional document translation methods (e.g., PDF translation), which often break formulas and formatting, LaTeXTrans leverages LLM to translate preprocessed LaTeX sources and employs a workflow composed of six agents—Parser, Translator, Validator, Summarizer, Terminology Extractor, and Generator to achieve the features. The figure below illustrates the system architecture of LaTeXTrans. 
-<!-- For a more detailed introduction, please refer to our published paper 🔗 [LaTeXTrans: Structured LaTeX Translation with Multi-Agent Coordination](https://arxiv.org/abs/2508.18791). -->
-
-<!-- <img src="./main-figure.jpg" width="1000px"></img> -->
-
-
-# 🛠️ Installation Guide
-
-#### 1. Clone Repository
+### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/NiuTrans/LaTeXTrans.git
-cd LaTeXTrans
-pip install -e .
+git clone <本仓库地址>
+cd TeXClaudeTrans
 ```
 
-#### (Optional) Use Conda Environment
+### 2. 安装 Python 依赖
 
 ```bash
-conda create -n latextrans python=3.10 -y
-conda activate latextrans
-git clone https://github.com/NiuTrans/LaTeXTrans.git
-cd LaTeXTrans
-pip install -e .
+pip install -e .            # 安装依赖，并注册 latextrans / latextrans-gui 命令
+# 或者只装依赖、用 python 直接运行：
+pip install -r requirements.txt
 ```
 
-#### 2. Install MikTex(Recommended) or TeXLive
+> 若不执行 `pip install -e .`，可用 `python main.py ...` 和
+> `python -m streamlit run src/gui/streamlit_app.py` 代替下文的 `latextrans` / `latextrans-gui` 命令。
 
-If you need to compile LaTeX files (e.g., generate PDF output), install [MikTex](https://miktex.org/download) or [TeXLive](https://www.tug.org/texlive/) !
+### 3. 安装 TeX 发行版（编译 PDF 需要）
 
- > [!IMPORTANT]
-For MikTex, installation please be sure to select "install on the fly", in addition, you need to install additional [Strawberry Perl](http://strawberryperl.com/) support compilation.
+需要 `pdflatex` / `xelatex` 在 `PATH` 中。翻译本身（产出 JSON 中间结果）不需要 TeX，只有最后一步编译 PDF 需要。
 
-# ⚙️ Configuration Guide
+- **Linux / WSL**：精简安装即可覆盖中文论文（约 1–1.5GB）：
+  ```bash
+  sudo apt install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+    texlive-xetex texlive-lang-chinese texlive-fonts-recommended fonts-noto-cjk
+  ```
+- **Windows**：安装 [MiKTeX](https://miktex.org/download)（建议勾选 "install on the fly"）或 [TeX Live](https://www.tug.org/texlive/)。
 
-### Local Configuration
+### 4.（仅 claude_code 后端）安装并登录 Claude Code CLI
 
-Please edit the configuration file before use:
+如果要用本地 Claude 翻译，需要本机装有 [Claude Code](https://claude.com/claude-code) 命令行并已登录（OAuth）。验证：
 
-```arduino
-config/default.toml
+```bash
+claude --version
 ```
 
-Set the language model's API key and base URL in default.toml :
+# ⚙️ 配置
+
+编辑 `config/default.toml`：
 
 ```toml
-model = " " # model name (For example, deepseek-chat)
-api_key = " " # your_api_key_here
-base_url = " " # base url of the API (For example, https://api.deepseek.com/v1/chat/completions)
+[llm_config]
+# 翻译后端："api"（OpenAI 兼容接口）或 "claude_code"（本地 claude 命令行）
+backend = "api"
+
+# backend = "api" 时：填模型名 / api_key / base_url
+# backend = "claude_code" 时：model 作为 claude 别名（opus/sonnet/haiku/fable，可留空用默认），
+#   api_key / base_url 被忽略（走你本地 Claude Code 登录）
+model = ""
+api_key = ""
+base_url = ""
+
+# effort（仅 claude_code）：推理强度 —— ""/low/medium/high/xhigh/max
+effort = ""
 ```
 
- > [!NOTE]
-The following example shows the recommended base_url for different models:
+**两种后端对比：**
 
-| Model |base_url| 
-|:-|:-|
-|deepseek-chat|https://api.deepseek.com/v1/chat/completions|
-|gpt-4o|https://api.openai.com/v1/chat/completions|
-|gemini-2.5-pro|https://generativelanguage.googleapis.com/v1beta/openai/chat/completions|
+| | `api` | `claude_code` |
+|---|---|---|
+| 调用方式 | HTTP 调 OpenAI 兼容 `/v1/chat/completions` | 本地起 `claude -p` 子进程 |
+| 鉴权 | 需要 `api_key` | 用你已登录的 Claude Code（无需 key） |
+| 模型 | 任意模型名（deepseek-chat、gpt-4o…） | claude 别名 opus/sonnet/haiku/fable |
+| 推理强度 | 不支持 | 支持 `effort` |
+| 并发 | 默认 10 | 默认 4（子进程较重） |
 
-# 📚 Usage
+> `api` 模式的 `base_url` 必须是完整的 completions 端点，例如：
+> | 模型 | base_url |
+> |:-|:-|
+> | deepseek-chat | https://api.deepseek.com/v1/chat/completions |
+> | gpt-4o | https://api.openai.com/v1/chat/completions |
+> | gemini-2.5-pro | https://generativelanguage.googleapis.com/v1beta/openai/chat/completions |
 
-###  Translation via ArXiv ID 
+# 📚 使用
 
-Simply provide an arXiv paper ID to complete translation:
-
-```bash
-latextrans --arxiv ${xxxx}
-# For example, 
-# latextrans --arxiv 2508.18791
-```
-
-Versioned arXiv IDs are also supported, so you can target a specific revision:
+## 命令行
 
 ```bash
-latextrans --arxiv 2508.18791v2
-```
+# 通过 arXiv ID（自动下载源码，支持带版本号如 2501.12948v1）
+latextrans --arxiv 2501.12948
 
-This command will:
+# 批量（逗号分隔）
+latextrans --arxiv 2501.12948, 2407.01648
 
-1. Download the LaTeX source code from arXiv and extract it
-2. Execute a workflow consisting of parsing, translation, refactoring and compilation
-3. Save the translated LaTeX project file of the paper and the PDF of the compiled translation in the outputs folder
+# 本地项目目录 或 压缩包（.zip/.tar/.tar.gz/.tgz）
+latextrans --project path/to/source.tar.gz
 
-### Batch Translation via ArXiv IDs
-
-You can translate multiple arXiv papers in one run (comma-separated):
-
-```bash
-latextrans --arxiv ${xxxx}, ${xxxx}
-# For example,
-# latextrans --arxiv 2508.18791v2, 2407.01648
-```
-
-### Translation via Local Project
-
-You can also pass a local compressed source package directly:
-
-```bash
-latextrans --project D:\\path\\to\\paper_source.tar.gz
-```
-
-Or pass a local extracted project directory:
-
-```bash
-latextrans --project D:\\path\\to\\paper_project_dir
-```
-
-When you provide `--arxiv` or `--project`, LaTeXTrans only processes those explicit inputs.
-Existing folders under `tex source` are ignored in this mode.
-
-To process every existing project under `tex source`, run:
-
-```bash
+# 处理 tex source/ 下已有的全部项目
 latextrans --all-existing
+
+# 用本地 Claude 翻译，并指定模型与推理强度
+latextrans --backend claude_code --model sonnet --effort high --arxiv 2501.12948
 ```
 
-### GUI via Streamlit
+常用参数：`--backend`、`--model`、`--effort`、`--url`、`--key`、`--output`、`--source`、`--prompt-file`、`--config`，均可覆盖配置文件。
 
-If you want a browser-based GUI with live workflow progress, logs, and runtime configuration, launch:
+> 只填 arXiv ID 即可，**会自动从 arXiv 下载源码**到 `tex source/`，无需自己准备。
+
+## 图形界面（Streamlit）
 
 ```bash
 latextrans-gui
+# 或：python -m streamlit run src/gui/streamlit_app.py
 ```
 
-Or run Streamlit directly:
+浏览器打开 `http://localhost:8501`。侧边栏可设置：
 
-```bash
-streamlit run src/gui/streamlit_app.py
-```
+- **Backend**：`api` / `claude_code`
+- **Model**：claude_code 模式下为下拉（opus/sonnet/haiku/fable）；api 模式为文本框
+- **Reasoning effort**：claude_code 模式下的推理强度下拉
+- **Custom Translation Prompts**：展开后可在线编辑全部生效的翻译 Prompt（见下）
+- 输入区填 arXiv ID 或本地项目路径，点 **Start Translation**，可看实时进度、日志与生成的 PDF
 
- > [!NOTE]
-Although LaTeXTrans supports translation from any language to any language, the current version has only made relatively complete compilation adaptations for translation from English to Chinese. When translating to other languages, the final output pdf may contain errors. We welcome you to raise an issue to describe the problem you have encountered, and we will solve it case by case.
+# 🎯 自定义翻译 Prompt
 
-<!-- # 🧰 Experimental Results
+翻译用的系统 Prompt 可以完全自定义，对两种后端都生效。三种入口：
 
-| System | COMETkiwi | LLM-score | FC-score | Cost |
-|:-|:-:|:-:|:-:|:-:|
-|NiuTrans |64.69|7.93|60.72|-|
-|Google Translate |46.23|5.93|51.00|-|
-|LLaMA-3.1-8b|42.89|2.92|49.40|-|
-|Qwen-3-8b|45.55|7.87|48.68|-|
-|Qwen-3-14b|68.18|8.76|65.63|-|
-|DeepSeek-V3|67.26|**9.02**|63.68|$0.02|
-|GPT-4o|67.22|8.58|58.32|$0.13|
-|**LaTeXTrans(Qwen-3-14b)**|71.37|8.97|71.20|-|
-|**LaTeXTrans(DeepSeek-V3)**|73.48|9.01|70.52|$0.10|
-|**LaTeXTrans(GPT-4o)**|**73.59**|8.92|**71.52**|$0.35|
+1. **配置文件**：`config/default.toml` 里设 `user_prompt_file = "config/prompts.example.toml"`，或命令行 `--prompt-file`；
+2. **图形界面**：侧边栏展开 "Custom Translation Prompts (TOML)"，在文本框里直接编辑，**保存到文件**或**一键恢复默认**；
+3. 直接编辑 `config/prompts.example.toml`。
 
-Note:
-- **COMETkiwi** : a quality estimation model ([wmt22-cometkiwi-da](https://huggingface.co/Unbabel/wmt22-cometkiwi-da)) that reflects the quality of the translation, the higher the score, the better the translation quality.
-- **LLM-score** : a method for evaluating the quality of translation using LLM (GPT-4o), the higher the score, the better the translation quality.
-- **FC-score** : a method proposed in our paper to evaluate the formatting ability of LaTeX translation by detecting the number of errors in the compiled logs, the higher the score, the better the ability to maintain format.
-- **Cost** : the average cost of translating each paper using the official API. -->
-  
+要点：
+- 文件为 TOML 格式，**必须使用单引号 `'''字面量'''` 字符串**，否则 LaTeX 反斜杠会被转义破坏；
+- `{SOURCE_LANG}` / `{TARGET_LANG}` 会在运行时替换为语言名；
+- 只列出你想改的 Prompt，未列出的用内置默认；
+- 务必保留"仅翻译自然语言、保留 `<PLACEHOLDER_...>` 占位符"等结构约束，否则会破坏 LaTeX、导致校验/编译失败。
 
+当前真正生效的 Prompt 共 9 个：正文 / 图表标题 / 环境块（各含术语表版本）、错误重译、术语抽取、环境是否需翻译的判断。
 
-# 🖼️ Translation Examples
+# 📁 输出
 
-The following are four real translation examples generated by **LaTeXTrans**, with the original text on the left and translation results on the right.
+- 译文项目与 PDF 在 `outputs/<目标语言>_<项目名>/` 下，最终 PDF 名为 `<目标语言>_<项目名>.pdf`。
+- 用 `--output` 或 GUI 的 "Output Dir" 可改输出目录。
+- **WSL 用户**：可把输出设到 Windows 路径（如 `/mnt/c/Users/你/Desktop/trans`），但 `/mnt/c` 上编译较慢；更推荐保留默认 `outputs/`，再在 Windows 资源管理器用 `\\wsl$\...` 访问或复制结果。
 
-### 📄 Case 1 ( en->ch ) :
+# ⚠️ 说明
 
-<table>
-  <tr>
-    <td align="center"><b>Original</b></td>
-    <td align="center"><b>Translation</b></td>
-  </tr>
-  <tr>
-    <td><img src="examples/case1src.png" width="100%"></td>
-    <td><img src="examples/case1ch.png" width="100%"></td>
-  </tr>
-</table>
+- 目前对 **英文 → 中文** 的编译适配最完善；翻到其它语言时最终 PDF 可能出现编译错误，欢迎提 issue。
+- `claude_code` 模式是逐段起独立 `claude` 进程、并发较低，批量翻译时较慢；追求质量可选 `opus` + 较高 `effort`，追求速度可选 `sonnet`。
 
-### 📄 Case 2 ( en->ch ):
+# 🙏 致谢
 
-<table>
-  <tr>
-    <td align="center"><b>Original</b></td>
-    <td align="center"><b>Translation</b></td>
-  </tr>
-  <tr>
-    <td><img src="examples/case3src.png" width="100%"></td>
-    <td><img src="examples/case3ch.png" width="100%"></td>
-  </tr>
-</table>
+本项目基于 [NiuTrans/LaTeXTrans](https://github.com/NiuTrans/LaTeXTrans)。感谢原作者团队的工作。
 
-### 📄 Case 3 ( en->jp ):
-
-<table>
-  <tr>
-    <td align="center"><b>Original</b></td>
-    <td align="center"><b>Translation</b></td>
-  </tr>
-  <tr>
-    <td><img src="examples\case-en.png" width="100%"></td>
-    <td><img src="examples\case-jp.png" width="100%"></td>
-  </tr>
-</table>
-
-### 📄 Case 4 ( en->jp ):
-
-<table>
-  <tr>
-    <td align="center"><b>Original</b></td>
-    <td align="center"><b>Translation</b></td>
-  </tr>
-  <tr>
-    <td><img src="examples\case5a-1-en.png" width="100%"></td>
-    <td><img src="examples\case5b-1-jp.png" width="100%"></td>
-  </tr>
-</table>
-
-📂 **See [`examples/`](examples/) folder for more cases**, including complete translation PDFs for each case.
-
----
-## Acknowledgments
-
-We would like to thank all the students who contributed to this project：
-Haosong Xv, Yiyang Liu, Heng Zhang, Xiaoru Huang, Yihang Zhang, Ce Liu, Shuochang Zhang, Jihang Yv, Boyang Liu.
-
----
-## Citation
-```bash
+```bibtex
 @article{zhu2025latextrans,
   title={LaTeXTrans: Structured LaTeX Translation with Multi-Agent Coordination},
   author={Zhu, Ziming and Wang, Chenglong and Xing, Shunjie and Huo, Yifu and Tian, Fengning and Du, Quan and Yang, Di and Zhang, Chunliang and Xiao, Tong and Zhu, Jingbo},
   journal={arXiv preprint arXiv:2508.18791},
   year={2025}
 }
+```

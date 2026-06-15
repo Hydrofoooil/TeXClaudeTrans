@@ -108,7 +108,9 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="config/default.toml", help="Path to the config TOML file.")
+    parser.add_argument("--backend", type=str, default="", choices=["", "api", "claude_code"], help="Translation backend: 'api' or 'claude_code'.")
     parser.add_argument("--model", type=str, default="", help="Model for translating.")
+    parser.add_argument("--effort", type=str, default="", choices=["", "low", "medium", "high", "xhigh", "max"], help="Reasoning effort for claude_code backend.")
     parser.add_argument("--url", type=str, default="", help="Model url.")
     parser.add_argument("--key", type=str, default="", help="Model key.")
     parser.add_argument("--arxiv", nargs="+", default=[], help="arXiv ID(s), comma-separated.")
@@ -120,6 +122,7 @@ def main():
     )
     parser.add_argument("--output", type=str, default="", help="output directory.")
     parser.add_argument("--source", type=str, default="", help="tex source directory.")
+    parser.add_argument("--prompt-file", type=str, default="", help="Path to a TOML file overriding the default translation prompts.")
     parser.add_argument(
         "--all-existing",
         action="store_true",
@@ -129,6 +132,8 @@ def main():
     args = parser.parse_args()
     config = toml.load(args.config)
 
+    if args.backend:
+        config["llm_config"]["backend"] = args.backend
     if args.url:
         config["llm_config"]["base_url"] = args.url
     if args.arxiv:
@@ -143,12 +148,16 @@ def main():
 
     if args.model:
         config["llm_config"]["model"] = args.model
+    if args.effort:
+        config["llm_config"]["effort"] = args.effort
     if args.key:
         config["llm_config"]["api_key"] = args.key
     if args.source:
         config["tex_sources_dir"] = args.source
     if args.output:
         config["output_dir"] = args.output
+    if args.prompt_file:
+        config["user_prompt_file"] = args.prompt_file
 
     input_items = config.get("paper_list", [])
     projects_dir = str(_resolve_path(config.get("tex_sources_dir", "tex source")))

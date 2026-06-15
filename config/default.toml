@@ -9,8 +9,21 @@ category = {}
 update_term = "False"
 mode = 0
 user_term = ""
+# Optional: path to a TOML file that overrides the built-in translation prompts.
+# Only the prompt keys you list are replaced; the rest keep their defaults.
+# See config/prompts.example.toml for the available keys and format.
+user_prompt_file = ""
 
 [llm_config]
+# Translation backend: "api" (OpenAI-compatible HTTP) or "claude_code" (local claude CLI).
+backend = "api"
+# For backend = "api": model name (e.g. deepseek-chat / gpt-4o), plus api_key and base_url.
+# For backend = "claude_code": model is a claude alias (e.g. opus / sonnet); leave empty for
+# the CLI default. api_key / base_url are ignored (uses your local Claude Code login).
+# effort (claude_code only): reasoning effort — "" / low / medium / high / xhigh / max.
 model = ""
+effort = ""
 api_key = ""
 base_url = ""
+# Optional: override concurrent LLM calls (default: api=10, claude_code=4).
+# concurrency = 10

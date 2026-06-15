@@ -3,6 +3,7 @@ from src.agents.tool_agents.base_tool_agent import BaseToolAgent
 #from TransLatex.src.formats.latex.prompts import *
 import src.formats.latex.prompts as pm
 from src.formats.latex.utils import *
+from src.llm import create_backend, LLMBackendError
 from pathlib import Path
 import sys
 import os
@@ -37,6 +38,7 @@ class TranslatorAgent(BaseToolAgent):
         self.model = config["llm_config"].get("model", "gpt-4o")
         self.base_url = config["llm_config"].get("base_url", None)
         self.API_KEY = config["llm_config"].get("api_key", None)
+        self.backend = create_backend(config)
         self.user_term = config.get("user_term", None)
         self.target_language = config.get("target_language", "ch")
         self.category = config.get("category", None)
@@ -58,6 +60,8 @@ class TranslatorAgent(BaseToolAgent):
     async def execute(self, error_retry_count=0, Maxtry=3):
 
         pm.init_prompts(self.config["source_language"], self.config["target_language"])
+        pm.apply_user_prompts(self.config.get("user_prompt_file"), self.config["source_language"], self.config["target_language"])
+        pm.apply_prompt_overrides(self.config.get("prompt_overrides"), self.config["source_language"], self.config["target_language"])
         self.add_placeholder()
         self.build_term_dict()
 
@@ -81,7 +85,7 @@ class TranslatorAgent(BaseToolAgent):
             sys.stderr = sys.__stderr__
 
             async with aiohttp.ClientSession() as session:
-                sem = asyncio.Semaphore(10)  # Considering the api response speed, processing one section approximately takes about 10 seconds, and initiating a call every half second, 
+                sem = asyncio.Semaphore(self.backend.max_concurrency)  # Considering the api response speed, processing one section approximately takes about 10 seconds, and initiating a call every half second,
                                              # around 10 should not waste api tokens
 
                 async def process_section(i, sec):
@@ -284,7 +288,7 @@ class TranslatorAgent(BaseToolAgent):
     async def _retranslate_error_parts(self, secs, caps, envs, session) -> Any:
 
         async with aiohttp.ClientSession() as session:
-            sem = asyncio.Semaphore(20)  
+            sem = asyncio.Semaphore(self.backend.max_concurrency)
 
             sys.stderr = open(os.devnull, 'w')
             process_b = st.empty()
@@ -563,30 +567,19 @@ class TranslatorAgent(BaseToolAgent):
                                      fail_part: str,
                                      type: str,
                                      session: aiohttp.ClientSession) -> str:
-        
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {"role": "system", "content": f"{system_prompt}"},
-                {"role": "user", "content": f"{text}"}
-            ],
-            "temperature": 0.7,
-            "max_new_tokens": 8192
-        }
 
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
+        messages = [
+            {"role": "system", "content": f"{system_prompt}"},
+            {"role": "user", "content": f"{text}"}
+        ]
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
-                    response.raise_for_status()
-                    result = await response.json()
-                    return result["choices"][0]["message"]["content"].strip()
+                return await self.backend.acomplete(
+                    messages, session=session, temperature=0.7, max_new_tokens=8192
+                )
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (LLMBackendError, aiohttp.ClientError, asyncio.TimeoutError) as e:
                 if attempt < 3:
                     await asyncio.sleep(5)
                 else:
@@ -608,36 +601,24 @@ class TranslatorAgent(BaseToolAgent):
                                           type: str,
                                           session: aiohttp.ClientSession) -> str:
 
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": f"{system_prompt}\nWhen translating, you must strictly use the following glossary for substitution. This is the highest priority rule to ensure the consistency of terms throughout the text.\n<Glossary>:\n{self.term_dict}\nNow, please translate the following new paragraph. Maintain the terminology from the glossary provided."
-                },
-                {
-                    "role": "user",
-                    "content": f"[Current LaTeX Paragraph]:\n{text}"
-                }
-            ],
-            "temperature": 0.7,
-            # "max_length": 100000,
-            "max_new_tokens": 8192
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_prompt}\nWhen translating, you must strictly use the following glossary for substitution. This is the highest priority rule to ensure the consistency of terms throughout the text.\n<Glossary>:\n{self.term_dict}\nNow, please translate the following new paragraph. Maintain the terminology from the glossary provided."
+            },
+            {
+                "role": "user",
+                "content": f"[Current LaTeX Paragraph]:\n{text}"
+            }
+        ]
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
-                    response.raise_for_status()
-                    result = await response.json()
-                    return result["choices"][0]["message"]["content"].strip()
+                return await self.backend.acomplete(
+                    messages, session=session, temperature=0.7, max_new_tokens=8192
+                )
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (LLMBackendError, aiohttp.ClientError, asyncio.TimeoutError) as e:
                 if attempt < 3:
                     await asyncio.sleep(5)
                 else:
@@ -663,36 +644,24 @@ class TranslatorAgent(BaseToolAgent):
 
         user_prompt = f"[Original]:\n{part['content']}\n[Translation]:\n{part['trans_content']}\n[Error]:\n{error_message}"
         # print(user_prompt,'\n')
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": f"{system_prompt}\nWhen translating, you must strictly use the following glossary for substitution. This is the highest priority rule to ensure the consistency of terms throughout the text.\n<Glossary>:\n{self.term_dict}\nNow, please translate the following new paragraph. Maintain the terminology from the glossary provided."
-                },
-                {
-                    "role": "user",
-                    "content": f"{user_prompt}"
-                }
-            ],
-            "temperature": 0.7,
-            # "max_length": 100000,
-            "max_new_tokens": 8192
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_prompt}\nWhen translating, you must strictly use the following glossary for substitution. This is the highest priority rule to ensure the consistency of terms throughout the text.\n<Glossary>:\n{self.term_dict}\nNow, please translate the following new paragraph. Maintain the terminology from the glossary provided."
+            },
+            {
+                "role": "user",
+                "content": f"{user_prompt}"
+            }
+        ]
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
-                    response.raise_for_status()
-                    result = await response.json()
-                    return result["choices"][0]["message"]["content"].strip()
+                return await self.backend.acomplete(
+                    messages, session=session, temperature=0.7, max_new_tokens=8192
+                )
 
-            except requests.exceptions.RequestException as e:
+            except (LLMBackendError, aiohttp.ClientError, asyncio.TimeoutError, requests.exceptions.RequestException) as e:
                 # print(f"Warning: request {attempt} failed for {fail_part}: {e}")
                 if attempt < 3:
                     await asyncio.sleep(5)
@@ -711,36 +680,24 @@ class TranslatorAgent(BaseToolAgent):
     async def _request_llm_for_extract_terms(self, system_prompt, src, tgt,
                                        session: aiohttp.ClientSession) -> str:
 
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": f"{system_prompt}"
-                },
-                {
-                    "role": "user", 
-                    "content": f"<en source>\n{src}\n<zh translation>\n{tgt}"
-                }
-            ],
-            "temperature": 0.7,
-            # "max_length": 100000,
-            # "max_tokens": 50
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_prompt}"
+            },
+            {
+                "role": "user",
+                "content": f"<en source>\n{src}\n<zh translation>\n{tgt}"
+            }
+        ]
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
-                    response.raise_for_status()
-                    result = await response.json()
-                    return result["choices"][0]["message"]["content"].strip()
+                return await self.backend.acomplete(
+                    messages, session=session, temperature=0.7
+                )
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (LLMBackendError, aiohttp.ClientError, asyncio.TimeoutError) as e:
                 if attempt < 3:
                     await asyncio.sleep(5)
                 else:
@@ -751,38 +708,24 @@ class TranslatorAgent(BaseToolAgent):
         """
         Requests the LLM to summarize the given text.
         """
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": f"{system_prompt}"
-                },
-                {
-                    "role": "user", 
-                    "content": f"<Text to summarize>:\n{text}\n<Summary>:\n"
-                }
-            ],
-            "temperature": 0.7,
-            # "max_length": 100000,
-            "max_new_tokens": 8192
-        }
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_prompt}"
+            },
+            {
+                "role": "user",
+                "content": f"<Text to summarize>:\n{text}\n<Summary>:\n"
+            }
+        ]
 
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
         for attempt in range(1, 4):
             try:
-                response = requests.post(self.base_url, json=payload, headers=headers, timeout=100)
-                response.raise_for_status()  
-                result = response.json()
-                return result["choices"][0]["message"]["content"].strip()
-            except requests.exceptions.RequestException as e:
+                return self.backend.complete(messages, temperature=0.7, max_new_tokens=8192)
+            except (LLMBackendError, requests.exceptions.RequestException) as e:
                 if attempt < 3:
                     print(f"{e}")
-                    time.sleep(3)  
+                    time.sleep(3)
                 else:
                     print("Warning: failed to summarize text, set N/A.")
                     return "N/A"
@@ -791,38 +734,24 @@ class TranslatorAgent(BaseToolAgent):
         """
         Requests the LLM to refine the given summary.
         """
-        payload = {
-            "model": f"{self.model}",
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": f"{system_prompt}"
-                },
-                {
-                    "role": "user", 
-                    "content": f"<prev_summary>:\n{sum}\n<new_section>:\n{text}\n<refined_summary>:\n"
-                }
-            ],
-            "temperature": 0.7,
-            # "max_length": 100000,
-            "max_new_tokens": 8192
-        }
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system_prompt}"
+            },
+            {
+                "role": "user",
+                "content": f"<prev_summary>:\n{sum}\n<new_section>:\n{text}\n<refined_summary>:\n"
+            }
+        ]
 
-        headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
         for attempt in range(1, 4):
             try:
-                response = requests.post(self.base_url, json=payload, headers=headers, timeout=100)
-                response.raise_for_status()  
-                result = response.json()
-                return result["choices"][0]["message"]["content"].strip()
-            except requests.exceptions.RequestException as e:
+                return self.backend.complete(messages, temperature=0.7, max_new_tokens=8192)
+            except (LLMBackendError, requests.exceptions.RequestException) as e:
                 if attempt < 3:
                     print(f"{e}")
-                    time.sleep(3)  
+                    time.sleep(3)
                 else:
                     print("Warning: failed to refine summary, set N/A.")
                     return "N/A"

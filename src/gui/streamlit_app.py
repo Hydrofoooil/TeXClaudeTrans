@@ -8,8 +8,81 @@ from typing import Any, Dict, List
 import streamlit as streamlit_backend
 import toml
 
+import src.formats.latex.prompts as pm
 from src.runtime import run_translation, split_multivalue_text
 from src.utils.progress import get_progress_backend, set_progress_backend
+
+
+_PROMPTS_FILE_PATH = "config/prompts.example.toml"
+
+# Only these prompts actually affect translation in the current workflow; the
+# editor exposes/exports just these (the other entries in _KNOWN_PROMPTS are
+# defined but not wired into any code path yet, so editing them has no effect).
+_ACTIVE_PROMPTS = [
+    "section_system_prompt",                  # Mode 0: body paragraphs (main)
+    "caption_system_prompt",                  # Mode 0: figure/table captions
+    "env_system_prompt",                      # Mode 0: translatable environments
+    "section_system_prompt_with_dict",        # Mode 2 (+glossary): body
+    "caption_system_prompt_with_dict",        # Mode 2 (+glossary): captions
+    "env_system_prompt_with_dict",            # Mode 2 (+glossary): environments
+    "retrans_error_parts_system_prompt",      # Mode 1: re-translate failed parts
+    "extract_terminology_system_prompt",      # Mode 2 (+update_term): glossary extraction
+    "set_need_trans_for_envs_system_prompt",  # Parser: env needs translation? (true/false)
+]
+
+_PROMPTS_FILE_HEADER = (
+    "# Translation prompt overrides — edit any value below to customize.\n"
+    "# TOML format; use single-quoted '''literal''' strings so LaTeX backslashes survive.\n"
+    "# {SOURCE_LANG}/{TARGET_LANG} are substituted with the language names at run time.\n"
+    "# Keep the <PLACEHOLDER_...> tokens and the \"only translate natural language\" rules,\n"
+    "# or translation will break LaTeX / fail validation.\n"
+    "# This file is read & written by the GUI prompt editor; --prompt-file / user_prompt_file\n"
+    "# can also point here. Only prompts that differ from the built-in defaults are applied.\n"
+    "# Only the prompts that actually affect translation are listed here.\n"
+)
+
+
+def _read_prompts_file() -> str:
+    try:
+        return Path(_PROMPTS_FILE_PATH).read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _write_prompts_file(content: str) -> None:
+    Path(_PROMPTS_FILE_PATH).write_text(content, encoding="utf-8")
+
+
+def _normalize_prompt(text: str) -> str:
+    """Normalize a prompt for comparison/storage: strip trailing whitespace on
+    every line plus surrounding blank lines. Editors/linters routinely trim
+    trailing spaces on save, so those must NOT count as "the user changed it"."""
+    return "\n".join(line.rstrip() for line in (text or "").strip().splitlines())
+
+
+def _prompts_to_toml(prompts_map: Dict[str, str], with_header: bool = True) -> str:
+    """Render the active prompts as override TOML using single-quoted literal
+    strings (so LaTeX backslashes survive). Only _ACTIVE_PROMPTS are emitted,
+    in that order."""
+    blocks = []
+    for name in _ACTIVE_PROMPTS:
+        if name not in prompts_map:
+            continue
+        body = _normalize_prompt(prompts_map[name]).replace("'''", "''")  # avoid breaking the literal string
+        blocks.append(f"{name} = '''\n{body}\n'''")
+    toml_body = "\n\n".join(blocks) + "\n"
+    return (_PROMPTS_FILE_HEADER + "\n" + toml_body) if with_header else toml_body
+
+
+def _save_editor_to_file() -> None:
+    _write_prompts_file(streamlit_backend.session_state.get("prompt_toml_text", "") or "")
+
+
+def _restore_defaults(defaults_map: Dict[str, str]) -> None:
+    """Overwrite BOTH the editor box and the prompts file with built-in defaults."""
+    content = _prompts_to_toml(defaults_map, with_header=True)
+    streamlit_backend.session_state["prompt_toml_text"] = content
+    _write_prompts_file(content)
 
 
 def _collect_result_pdfs(result: Dict[str, Any]) -> List[str]:
@@ -144,7 +217,43 @@ def _sidebar_form(defaults: Dict[str, Any]) -> Dict[str, Any]:
     config_path = streamlit_backend.sidebar.text_input("Config Path", "config/default.toml")
     source_language = streamlit_backend.sidebar.text_input("Source Language", defaults.get("source_language", "en"))
     target_language = streamlit_backend.sidebar.text_input("Target Language", defaults.get("target_language", "ch"))
-    model = streamlit_backend.sidebar.text_input("Model", llm_defaults.get("model", ""))
+    backend_options = ["api", "claude_code"]
+    default_backend = (llm_defaults.get("backend") or "api").strip().lower()
+    backend_index = backend_options.index(default_backend) if default_backend in backend_options else 0
+    backend = streamlit_backend.sidebar.selectbox(
+        "Backend",
+        backend_options,
+        index=backend_index,
+        help=(
+            "api: OpenAI-compatible HTTP endpoint (fill Model / Base URL / API Key). "
+            "claude_code: local claude CLI using your Claude Code login — Model is an alias "
+            "like opus/sonnet (empty = default), Base URL / API Key are ignored."
+        ),
+    )
+    effort = ""
+    if backend == "claude_code":
+        model_options = ["", "opus", "sonnet", "haiku", "fable"]
+        default_model = (llm_defaults.get("model") or "").strip()
+        model_index = model_options.index(default_model) if default_model in model_options else 0
+        model = streamlit_backend.sidebar.selectbox(
+            "Model",
+            model_options,
+            index=model_index,
+            format_func=lambda x: x or "(CLI default)",
+            help="claude CLI model alias. Empty = your Claude Code default.",
+        )
+        effort_options = ["", "low", "medium", "high", "xhigh", "max"]
+        default_effort = (llm_defaults.get("effort") or "").strip()
+        effort_index = effort_options.index(default_effort) if default_effort in effort_options else 0
+        effort = streamlit_backend.sidebar.selectbox(
+            "Reasoning effort",
+            effort_options,
+            index=effort_index,
+            format_func=lambda x: x or "(default)",
+            help="claude --effort level. Higher = more reasoning (slower). Empty = model default.",
+        )
+    else:
+        model = streamlit_backend.sidebar.text_input("Model", llm_defaults.get("model", ""))
     base_url = streamlit_backend.sidebar.text_input("Base URL", llm_defaults.get("base_url", ""))
     api_key = streamlit_backend.sidebar.text_input("API Key", llm_defaults.get("api_key", ""), type="password")
     tex_source_dir = streamlit_backend.sidebar.text_input("TeX Source Dir", defaults.get("tex_sources_dir", "tex source"))
@@ -162,12 +271,19 @@ def _sidebar_form(defaults: Dict[str, Any]) -> Dict[str, Any]:
         height=120,
         help="Optional terminology guidance passed through the existing config field.",
     )
+    user_prompt_file = streamlit_backend.sidebar.text_input(
+        "Custom Prompt File",
+        defaults.get("user_prompt_file", ""),
+        help="Optional path to a TOML file overriding the default translation prompts (see config/prompts.example.toml).",
+    )
 
     return {
         "config_path": config_path,
         "source_language": source_language.strip() or "en",
         "target_language": target_language.strip() or "ch",
+        "backend": backend,
         "model": model.strip(),
+        "effort": effort,
         "url": base_url.strip(),
         "key": api_key.strip(),
         "source": tex_source_dir.strip(),
@@ -176,6 +292,7 @@ def _sidebar_form(defaults: Dict[str, Any]) -> Dict[str, Any]:
         "update_term": "True" if update_term else "False",
         "all_existing": all_existing,
         "user_term": user_term.strip(),
+        "user_prompt_file": user_prompt_file.strip(),
     }
 
 
@@ -202,6 +319,79 @@ def _collect_inputs() -> Dict[str, List[str]]:
         "paper_list": split_multivalue_text(arxiv_text),
         "project_items": split_multivalue_text(project_text),
     }
+
+
+def _prompt_editor(params: Dict[str, Any]) -> Dict[str, str]:
+    """Render a single text box holding the prompt-override TOML file
+    (config/prompts.example.toml), pre-filled with all 17 prompts. Save writes
+    it back to the file; Restore overwrites both box and file with built-in
+    defaults. Returns the prompts that DIFFER from default as a ``{name: text}``
+    override dict. Parse errors / unknown keys only warn.
+    """
+    src = params["source_language"]
+    tgt = params["target_language"]
+    try:
+        defaults_map = pm.get_default_prompts(src, tgt)
+    except Exception as exc:  # never let the editor break the page
+        streamlit_backend.warning(f"Could not load default prompts: {exc}")
+        defaults_map = {}
+
+    if "prompt_toml_text" not in streamlit_backend.session_state:
+        # Pre-fill from the file; if it's missing/empty, seed with all defaults.
+        existing = _read_prompts_file()
+        streamlit_backend.session_state["prompt_toml_text"] = existing or _prompts_to_toml(defaults_map)
+
+    overrides: Dict[str, str] = {}
+    with streamlit_backend.expander("✏️ Custom Translation Prompts (TOML)", expanded=False):
+        streamlit_backend.caption(
+            f"The {len(_ACTIVE_PROMPTS)} active prompts below (file: {_PROMPTS_FILE_PATH}). Edit any value, then "
+            "**Save to file** to persist. Only prompts that differ from the built-in default are applied, "
+            "to BOTH backends. Keep '''single-quoted''' strings + <PLACEHOLDER_...> rules. "
+            f"{{SOURCE_LANG}}/{{TARGET_LANG}} are substituted (current: {src} → {tgt})."
+        )
+        col1, col2 = streamlit_backend.columns(2)
+        col1.button(
+            "💾 Save to file",
+            key="save_prompts",
+            on_click=_save_editor_to_file,
+            use_container_width=True,
+        )
+        col2.button(
+            "↺ Restore defaults (overwrite file)",
+            key="restore_prompts",
+            on_click=_restore_defaults,
+            args=(defaults_map,),
+            use_container_width=True,
+            disabled=not defaults_map,
+        )
+
+        streamlit_backend.text_area(
+            "prompt_toml",
+            key="prompt_toml_text",
+            height=460,
+            label_visibility="collapsed",
+            placeholder="section_system_prompt = '''...'''",
+        )
+
+        text = streamlit_backend.session_state.get("prompt_toml_text", "") or ""
+        if text.strip():
+            try:
+                parsed = toml.loads(text)
+            except Exception as exc:
+                streamlit_backend.error(f"TOML parse error — custom prompts ignored this run: {exc}")
+                return {}
+            unknown = [k for k in parsed if k not in _ACTIVE_PROMPTS]
+            for key, val in parsed.items():
+                if key in _ACTIVE_PROMPTS and isinstance(val, str):
+                    if _normalize_prompt(val) != _normalize_prompt(defaults_map.get(key)):
+                        overrides[key] = val
+            if overrides:
+                streamlit_backend.caption(f"✏️ {len(overrides)} prompt(s) differ from default and will be applied: {', '.join(overrides.keys())}")
+            else:
+                streamlit_backend.caption("All prompts match the defaults — running with built-in prompts.")
+            if unknown:
+                streamlit_backend.caption(f"⚠️ Ignored inactive/unknown key(s): {', '.join(unknown)}")
+    return overrides
 
 
 def _append_history(result: Dict[str, Any], params: Dict[str, Any], inputs: Dict[str, List[str]], logs: List[str]) -> None:
@@ -373,7 +563,9 @@ def _run_streamlit_job(params: Dict[str, Any], inputs: Dict[str, List[str]], tit
 
     overrides = {
         "paper_list": inputs["paper_list"],
+        "backend": params["backend"],
         "model": params["model"],
+        "effort": params.get("effort", ""),
         "url": params["url"],
         "key": params["key"],
         "source": params["source"],
@@ -383,6 +575,8 @@ def _run_streamlit_job(params: Dict[str, Any], inputs: Dict[str, List[str]], tit
         "mode": params["mode"],
         "user_term": params["user_term"],
         "update_term": params["update_term"],
+        "user_prompt_file": params["user_prompt_file"],
+        "prompt_overrides": params.get("prompt_overrides") or {},
     }
 
     writer = StreamlitLogWriter(log_placeholder, state)
@@ -433,6 +627,7 @@ def main() -> None:
     defaults = _load_defaults(default_config_path)
     params = _sidebar_form(defaults)
     inputs = _collect_inputs()
+    params["prompt_overrides"] = _prompt_editor(params)
 
     streamlit_backend.caption(
         "Provide arXiv IDs, local projects, or enable all-existing mode. Results, failed jobs, and recent runs stay visible in this session."

@@ -32,6 +32,92 @@ section_system_prompt_with_prev = None
 section_system_prompt_with_terms_prev = None
 
 
+# All prompt variables that a user prompt file is allowed to override.
+_KNOWN_PROMPTS = {
+    "caption_system_prompt", "section_system_prompt", "env_system_prompt",
+    "caption_system_prompt_with_dict", "section_system_prompt_with_dict", "env_system_prompt_with_dict",
+    "set_need_trans_for_envs_system_prompt", "retrans_error_parts_system_prompt",
+    "extract_terminology_system_prompt", "get_summary_system_prompt", "refine_summary_system_prompt",
+    "section_system_prompt_with_sum", "caption_system_prompt_with_sum", "env_system_prompt_with_sum",
+    "section_system_prompt_with_terms_sum", "section_system_prompt_with_prev",
+    "section_system_prompt_with_terms_prev",
+}
+
+
+def _apply_prompt_overrides(overrides, source_lang: str, target_lang: str):
+    """Core override: replace the module-level prompt globals from a
+    ``{name: text}`` mapping. ``{SOURCE_LANG}`` / ``{TARGET_LANG}`` tokens are
+    substituted with the resolved language names via plain string replace (so
+    literal LaTeX braces are left untouched). Returns ``(applied, unknown)``.
+    """
+    src = "English" if source_lang == "en" else source_lang
+    tgt = "Chinese" if target_lang == "ch" else target_lang
+
+    g = globals()
+    applied, unknown = [], []
+    for key, val in (overrides or {}).items():
+        if key not in _KNOWN_PROMPTS:
+            unknown.append(key)
+            continue
+        if not isinstance(val, str):
+            continue
+        g[key] = val.replace("{SOURCE_LANG}", src).replace("{TARGET_LANG}", tgt)
+        applied.append(key)
+    return applied, unknown
+
+
+def get_default_prompts(source_lang: str, target_lang: str) -> dict:
+    """Return ``{name: default_prompt_text}`` for every overridable prompt,
+    resolved for the given language pair. Used by the GUI to pre-fill the editor
+    and to restore defaults. NOTE: this calls ``init_prompts`` (resetting the
+    module globals to defaults); call it before applying any overrides.
+    """
+    init_prompts(source_lang, target_lang)
+    g = globals()
+    return {name: g.get(name) for name in _KNOWN_PROMPTS}
+
+
+def apply_prompt_overrides(overrides, source_lang: str, target_lang: str) -> None:
+    """Override prompts from an in-memory ``{name: text}`` dict (e.g. the GUI
+    prompt editor). Call this AFTER ``init_prompts``. Only listed keys change.
+    """
+    if not overrides:
+        return
+    applied, unknown = _apply_prompt_overrides(overrides, source_lang, target_lang)
+    if applied:
+        print(f"📝 Applied {len(applied)} custom prompt(s) from editor: {', '.join(applied)}")
+    if unknown:
+        print(f"⚠️ Ignored unknown prompt key(s): {', '.join(unknown)}")
+
+
+def apply_user_prompts(user_prompt_file, source_lang: str, target_lang: str) -> None:
+    """Override default prompts with the contents of a user TOML file.
+
+    Call this AFTER ``init_prompts`` so the file replaces the freshly generated
+    defaults. The file maps prompt names (see ``_KNOWN_PROMPTS``) to strings.
+    Use single-quoted ``'''literal'''`` TOML strings so LaTeX backslashes
+    survive. Only the keys present in the file are overridden; missing file,
+    parse errors, or unknown keys only warn (defaults are kept), never raise.
+    """
+    if not user_prompt_file:
+        return
+    path = user_prompt_file if os.path.isabs(user_prompt_file) else os.path.abspath(user_prompt_file)
+    if not os.path.isfile(path):
+        print(f"⚠️ user_prompt_file not found, keeping default prompts: {path}")
+        return
+    try:
+        overrides = toml.load(path)
+    except Exception as e:
+        print(f"⚠️ Failed to parse user_prompt_file ({e}), keeping default prompts.")
+        return
+
+    applied, unknown = _apply_prompt_overrides(overrides, source_lang, target_lang)
+    if applied:
+        print(f"📝 Applied {len(applied)} custom prompt(s) from {os.path.basename(path)}: {', '.join(applied)}")
+    if unknown:
+        print(f"⚠️ Ignored unknown prompt key(s) in {os.path.basename(path)}: {', '.join(unknown)}")
+
+
 def init_prompts(source_lang: str, target_lang: str):
     global caption_system_prompt, section_system_prompt, env_system_prompt, caption_system_prompt_with_dict, section_system_prompt_with_dict, \
         env_system_prompt_with_dict, set_need_trans_for_envs_system_prompt, retrans_error_parts_system_prompt, extract_terminology_system_prompt, \
@@ -44,7 +130,7 @@ def init_prompts(source_lang: str, target_lang: str):
         target_lang = "Chinese"
 
 
-    caption_system_prompt = f"""
+    caption_system_prompt = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate concise LaTeX texts provided by users, such as paper titles, figure titles, and table titles, from {source_lang} into {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     Please strictly follow the following requirements when translating:
@@ -62,7 +148,7 @@ def init_prompts(source_lang: str, target_lang: str):
     8.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     9.Please add appropriate spaces before and after special symbols to ensure that after the translated code is compiled, the text will not be misaligned on the right side, which will affect the layout and format of the text. For example, when translating "|special_token|<reasoning_process>|special_token|<summary>", you may need to add appropriate spaces to become: "| special\_token| <reasoning\_process> | special\_token| <summary>", because if the text appears at the end of the line after compilation, it may be misaligned on the right side due to the inability to wrap.
     """
-    section_system_prompt = f"""
+    section_system_prompt = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     Please strictly follow the following requirements when translating:
@@ -82,7 +168,7 @@ def init_prompts(source_lang: str, target_lang: str):
     10.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     11.Name retention principle,always keep author names (e.g., "Daya Guo", "Dejian Yang") in their original {source_lang} form. Never translate, transliterate, or reorder names (e.g., "Daya Guo" → "Daya Guo", NOT "郭达雅" or "Guo Daya"). 
     """
-    env_system_prompt = f"""
+    env_system_prompt = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     Please strictly follow the following requirements when translating:
@@ -101,7 +187,7 @@ def init_prompts(source_lang: str, target_lang: str):
     9.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     """
 
-    caption_system_prompt_with_dict = f"""
+    caption_system_prompt_with_dict = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate concise LaTeX academic texts provided by users, such as paper titles, figure titles, and table titles, from {source_lang} into {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     Please strictly follow the following requirements when translating:
@@ -120,7 +206,7 @@ def init_prompts(source_lang: str, target_lang: str):
     9.Please add appropriate spaces before and after special symbols to ensure that after the translated code is compiled, the text will not be misaligned on the right side, which will affect the layout and format of the text. For example, when translating "|special_token|<reasoning_process>|special_token|<summary>", you may need to add appropriate spaces to become: "| special\_token| <reasoning\_process> | special\_token| <summary>", because if the text appears at the end of the line after compilation, it may be misaligned on the right side due to the inability to wrap.
     """
 
-    section_system_prompt_with_dict = f"""
+    section_system_prompt_with_dict = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.  
     Please strictly follow the following requirements when translating:
@@ -139,7 +225,7 @@ def init_prompts(source_lang: str, target_lang: str):
     9.Directly output only the translated LaTeX code without any additional explanations, formatting markers, or comments such as "```latex".
     10.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     """
-    env_system_prompt_with_dict = f"""
+    env_system_prompt_with_dict = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     Please strictly follow the following requirements when translating:
@@ -158,7 +244,7 @@ def init_prompts(source_lang: str, target_lang: str):
     9.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     """
 
-    set_need_trans_for_envs_system_prompt = f"""
+    set_need_trans_for_envs_system_prompt = rf"""
     You are a LaTeX translation assistant.
     
     Your task is to analyze the **content inside any LaTeX environment**, regardless of its environment name, and determine whether it should be translated when translating an academic paper.
@@ -224,7 +310,7 @@ def init_prompts(source_lang: str, target_lang: str):
     false
     """
 
-    retrans_error_parts_system_prompt = f"""
+    retrans_error_parts_system_prompt = rf"""
     You are a professional academic translator and LaTeX translation corrector.  
     Your task is to revise and improve machine-translated LaTeX academic texts based on three components provided by the user: the original {source_lang} LaTeX source, the existing {target_lang} translation, and the error information describing the issue(s). Your revision must strictly preserve LaTeX syntax integrity and comply with the following rules.
     
@@ -272,7 +358,7 @@ def init_prompts(source_lang: str, target_lang: str):
     Do not output the original input, explanations, or any extra content.
     """
 
-    extract_terminology_system_prompt = f"""
+    extract_terminology_system_prompt = rf"""
     You are an en-zh bilingual expert. Given an {source_lang} source sentence and its corresponding {target_lang} translation, your task is to extract all domain-specific terms from the {source_lang} sentence, along with their exact translations as they appear in the {target_lang} sentence.
     
     These include:
@@ -319,7 +405,7 @@ def init_prompts(source_lang: str, target_lang: str):
     <Proper nouns>
     """
 
-    get_summary_system_prompt = f"""
+    get_summary_system_prompt = rf"""
     You are an academic summarization assistant designed to support machine translation.
     
     Please read the following academic {source_lang} text and produce a structured, compact summary **intended to be used as context for translating subsequent sections of the same document**.
@@ -335,7 +421,7 @@ def init_prompts(source_lang: str, target_lang: str):
     Keep the output under 300 words.
     """
 
-    refine_summary_system_prompt = f"""
+    refine_summary_system_prompt = rf"""
     You are an academic summarization assistant designed to maintain an evolving semantic summary to support consistent and coherent machine translation of a long scientific document.
     
     You will be given two inputs:
@@ -352,7 +438,7 @@ def init_prompts(source_lang: str, target_lang: str):
     Use clear, academic {source_lang}. The updated summary should be no more than 300 words.
     """
 
-    section_system_prompt_with_sum = f"""
+    section_system_prompt_with_sum = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.  
     You are also provided with a dynamic summary of all previous content. **You must treat this summary as authoritative context**, and use it to:
@@ -376,7 +462,7 @@ def init_prompts(source_lang: str, target_lang: str):
     10.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     """
 
-    caption_system_prompt_with_sum  = f"""
+    caption_system_prompt_with_sum  = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate concise LaTeX academic texts provided by users, such as paper titles, figure titles, and table titles, from {source_lang} into {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     You are also provided with a summary of the previous text. Use this summary to understand the overall context and main ideas, so you can make better translation decisions regarding ambiguous expressions, pronouns, or abstract concepts.Please strictly follow the following requirements when translating.
@@ -395,7 +481,7 @@ def init_prompts(source_lang: str, target_lang: str):
     9.Please add appropriate spaces before and after special symbols to ensure that after the translated code is compiled, the text will not be misaligned on the right side, which will affect the layout and format of the text. For example, when translating "|special_token|<reasoning_process>|special_token|<summary>", you may need to add appropriate spaces to become: "| special\_token| <reasoning\_process> | special\_token| <summary>", because if the text appears at the end of the line after compilation, it may be misaligned on the right side due to the inability to wrap.
     """
 
-    env_system_prompt_with_sum = f"""
+    env_system_prompt_with_sum = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     You are also provided with a summary of the previous text. Use this summary to understand the overall context and main ideas, so you can make better translation decisions regarding ambiguous expressions, pronouns, or abstract concepts.Please strictly follow the following requirements when translating.
@@ -415,7 +501,7 @@ def init_prompts(source_lang: str, target_lang: str):
     9.<PLACEHOLDER_CAP_...>,<PLACEHOLDER_ENV_...>,<PLACEHOLDER_..._begin> and <PLACEHOLDER_..._end> are placeholders for artificial environments or captions. Please do not let them affect your translation and keep these placeholders after translation.
     """
 
-    section_system_prompt_with_terms_sum = f"""
+    section_system_prompt_with_terms_sum = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing.  
     Your task is to translate long LaTeX texts (including section titles and content) from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.
     
@@ -446,7 +532,7 @@ def init_prompts(source_lang: str, target_lang: str):
     You are expected to combine semantic understanding (from the summary), precise terminology usage (from the term dictionary), and strict LaTeX fidelity to produce a high-quality translation.
     """
 
-    section_system_prompt_with_prev = f"""
+    section_system_prompt_with_prev = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.  
     Please strictly follow the following requirements when translating:
@@ -468,7 +554,7 @@ def init_prompts(source_lang: str, target_lang: str):
     To ensure consistency in terminology and style, here is the context of the preceding paragraph:
     """
 
-    section_system_prompt_with_terms_prev = f"""
+    section_system_prompt_with_terms_prev = rf"""
     You are a professional academic translator specializing in LaTeX-based scientific writing. 
     Your task is to translate a long LaTeX text (including chapter titles and text) provided by users from {source_lang} to {target_lang}, while strictly maintaining the integrity of LaTeX syntax.  
     Please strictly follow the following requirements when translating:

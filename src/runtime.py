@@ -122,14 +122,20 @@ def load_runtime_config(
     overrides = overrides or {}
 
     llm_config = config.setdefault("llm_config", {})
+    if overrides.get("backend"):
+        llm_config["backend"] = overrides["backend"]
     if overrides.get("url"):
         llm_config["base_url"] = overrides["url"]
     if overrides.get("model"):
         llm_config["model"] = overrides["model"]
+    if overrides.get("effort"):
+        llm_config["effort"] = overrides["effort"]
     if overrides.get("key"):
         llm_config["api_key"] = overrides["key"]
+    if overrides.get("concurrency"):
+        llm_config["concurrency"] = overrides["concurrency"]
 
-    for key in ("source", "output", "source_language", "target_language", "user_term"):
+    for key in ("source", "output", "source_language", "target_language", "user_term", "user_prompt_file"):
         if overrides.get(key):
             mapped_key = {
                 "source": "tex_sources_dir",
@@ -137,6 +143,7 @@ def load_runtime_config(
                 "source_language": "source_language",
                 "target_language": "target_language",
                 "user_term": "user_term",
+                "user_prompt_file": "user_prompt_file",
             }[key]
             config[mapped_key] = overrides[key]
 
@@ -144,6 +151,8 @@ def load_runtime_config(
         config["mode"] = overrides["mode"]
     if overrides.get("update_term") is not None:
         config["update_term"] = overrides["update_term"]
+    if overrides.get("prompt_overrides"):
+        config["prompt_overrides"] = overrides["prompt_overrides"]
 
     extra_papers = overrides.get("paper_list") or []
     if extra_papers:

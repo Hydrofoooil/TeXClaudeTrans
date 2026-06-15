@@ -94,7 +94,10 @@ class GeneratorAgent(BaseToolAgent):
         self.status_text.text("🛠️ Compiling PDF document...")
         sys.stderr = sys.__stderr__
 
-        latex_compiler = LaTexCompiler(output_latex_dir=transed_latex_dir)
+        latex_compiler = LaTexCompiler(
+            output_latex_dir=transed_latex_dir,
+            target_language=self.config.get("target_language", "ch"),
+        )
         pdf_file = latex_compiler.compile()
 
         sys.stderr = open(os.devnull, 'w')

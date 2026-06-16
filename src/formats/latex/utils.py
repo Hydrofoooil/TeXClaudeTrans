@@ -557,6 +557,26 @@ def add_ctex_package(latex_code):
             latex_code = latex_code[:position] + "\n" + ctex_package + "\n" + latex_code[position:]
     return latex_code
 
+
+def add_xecjk_package(latex_code):
+    """注入 xeCJK 提供中文支持。相比 ctex，xeCJK 只加 CJK 字体支持，不接管行距/
+    章节/标题等版式，最大程度保留原模板排布(更接近原始 PDF)。中文字体用 texlive
+    自带的 fandol(与 ctex 默认一致)。"""
+    if "xeCJK" in latex_code or "\\usepackage[UTF8]{ctex}" in latex_code:
+        return latex_code
+    pkg = (
+        "\\usepackage{xeCJK}\n"
+        "\\setCJKmainfont{FandolSong-Regular.otf}[BoldFont=FandolHei-Regular.otf,ItalicFont=FandolKai-Regular.otf]\n"
+        "\\setCJKsansfont{FandolHei-Regular.otf}\n"
+        "\\setCJKmonofont{FandolFang-Regular.otf}\n"
+    )
+    documentclass_pattern = get_command_pattern(r'documentclass')
+    match = documentclass_pattern.search(latex_code)
+    if match:
+        position = match.end()
+        latex_code = latex_code[:position] + "\n" + pkg + latex_code[position:]
+    return latex_code
+
 def add_ja_package(latex_code):
 
     if "\\usepackage{luatex-ja}" not in latex_code:

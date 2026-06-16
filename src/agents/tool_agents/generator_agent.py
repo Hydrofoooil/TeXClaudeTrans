@@ -85,7 +85,8 @@ class GeneratorAgent(BaseToolAgent):
                                 envs=envs,
                                 inputs=inputs,
                                 newcommands=newcommands,
-                                output_latex_dir=transed_latex_dir
+                                output_latex_dir=transed_latex_dir,
+                                cjk_engine=self.config.get("cjk_engine", "xecjk"),
                             )
         latex_constructor.construct()
 
@@ -189,9 +190,9 @@ class GeneratorAgent(BaseToolAgent):
             # 用 textpos 绝对定位(独立包,不与 cvpr/iccv 自带的 \LenToUnit/\AddToShipoutPicture 冲突)
             if "{textpos}" not in s:
                 s = re.sub(r"(\\documentclass[^\n]*\n)", r"\1\\usepackage[absolute,overlay]{textpos}\n", s, count=1)
-            # 2.25 倍、灰色 #808080、字体 Microsoft Himalaya(试) — 注意 Path 硬编码 WSL/Windows，不通用
-            stamp_font = r"\fontspec[Path=/mnt/c/Windows/Fonts/]{himalaya.ttf}"
-            styled = r"\scalebox{2.25}{\textcolor[gray]{0.5}{" + stamp_font + r"\small " + stamp + r"}}"
+            # 2.25 倍、灰色 #808080、衬线字体。用文档自带的 roman 字族(\rmfamily),
+            # 完全可移植——不依赖任何外部字体文件，任何装了 TeX 的机器都能编译。
+            styled = r"\scalebox{2.25}{\textcolor[gray]{0.5}{\rmfamily\small " + stamp + r"}}"
             inject = (
                 today_cmd +
                 r"\begin{textblock*}{3cm}[0.5,0.5](2.0cm,0.5\paperheight)"

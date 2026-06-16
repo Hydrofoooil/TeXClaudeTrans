@@ -9,6 +9,9 @@ category = {}
 update_term = "False"
 mode = 0
 user_term = ""
+# 中文支持引擎："xecjk"(默认，只加中文字体、不改行距/版式，最接近原模板排布)
+# 或 "ctex"(开箱即用但会按中文习惯接管行距/标题等版式)。
+cjk_engine = "xecjk"
 # 在译文 PDF 首页左侧加 arXiv 竖排戳(序号+分类+日期),模拟 arXiv 发布版。
 # 仅对从 arXiv ID 翻译的论文生效;本地项目自动跳过。设 false 关闭。
 arxiv_stamp = true

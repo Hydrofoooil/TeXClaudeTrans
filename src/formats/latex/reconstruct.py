@@ -10,7 +10,8 @@ class LatexConstructor:
                  envs: List[Dict[str, Any]],
                  inputs: List[Dict[str, Any]],
                  newcommands: List[Dict[str, Any]],
-                 output_latex_dir: str
+                 output_latex_dir: str,
+                 cjk_engine: str = "xecjk",
                  ):
         self.sections = sections
         self.captions = captions
@@ -18,6 +19,7 @@ class LatexConstructor:
         self.inputs = inputs
         self.newcommands = newcommands
         self.output_latex_dir = output_latex_dir
+        self.cjk_engine = cjk_engine  # "xecjk"(默认,不改版式) 或 "ctex"(接管版式)
 
     def construct(self):
         """
@@ -130,7 +132,11 @@ class LatexConstructor:
             print(f"⚠️ Warning: Residual placeholders found and removed: {residual_matches}")
             tex = re.sub(r"<PLACEHOLDER_[^>]*>", "", tex)
 
-        tex = add_ctex_package(tex) # zh
+        # 中文支持：xeCJK(默认，只加字体不改版式，更接近原模板) 或 ctex(接管版式)
+        if getattr(self, "cjk_engine", "xecjk") == "ctex":
+            tex = add_ctex_package(tex)
+        else:
+            tex = add_xecjk_package(tex)
         # tex = add_ja_package(tex)  # ja
 
         main_file_path = find_main_tex_file(self.output_latex_dir)

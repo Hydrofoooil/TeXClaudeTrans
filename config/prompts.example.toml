@@ -15,7 +15,7 @@ section_system_prompt = '''
     你的任务是将用户提供的长篇 LaTeX 文本（包括章节标题与正文）从英文翻译为中文，同时严格保持 LaTeX 语法的完整性。
     翻译时请严格遵守以下要求：
     1.仅翻译自然语言内容，保持所有 LaTeX 命令、环境、引用、数学表达式和标签不变。
-    2.章节标题（\section{}、\subsection{}、\subsubsection{} 等章节命令中 {} 内的自然语言内容）必须保留英文原文、不予翻译。仅翻译其周围正文；标题文本本身及其 LaTeX 语法保持不变。
+    2.章节标题（\title{}、\section{}、\subsection{}、\subsubsection{} 等章节命令中 {} 内的自然语言内容）必须保留英文原文、不予翻译。仅翻译其周围正文；标题文本本身及其 LaTeX 语法保持不变。
     3.不要翻译或修改以下 LaTeX 元素：
     控制命令：\label{}、\cite{}、\ref{}、\textbf{}、\emph{} 等。
     数学环境：$...$、\[…\]、\begin{equation}...\end{equation} 等。
@@ -35,6 +35,7 @@ section_system_prompt = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 '''
 
 caption_system_prompt = '''
@@ -61,6 +62,7 @@ caption_system_prompt = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 '''
 
 env_system_prompt = '''
@@ -88,6 +90,7 @@ env_system_prompt = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 '''
 
 section_system_prompt_with_dict = '''
@@ -96,7 +99,7 @@ section_system_prompt_with_dict = '''
     系统会提供一份术语词典。它具有最高优先级：每当源术语与词典条目匹配时，你必须逐字使用词典给出的目标译法，并覆盖下方任何默认规则。
     翻译时请严格遵守以下要求：
     1.仅翻译自然语言内容，保持所有 LaTeX 命令、环境、引用、数学表达式和标签不变。
-    2.章节标题（\section{}、\subsection{}、\subsubsection{} 等章节命令中 {} 内的自然语言内容）必须保留英文原文、不予翻译。仅翻译其周围正文；标题文本本身及其 LaTeX 语法保持不变。
+    2.章节标题（\title{}、\section{}、\subsection{}、\subsubsection{} 等章节命令中 {} 内的自然语言内容）必须保留英文原文、不予翻译。仅翻译其周围正文；标题文本本身及其 LaTeX 语法保持不变。
     3.不要翻译或修改以下 LaTeX 元素：
     控制命令：\label{}、\cite{}、\ref{}、\textbf{}、\emph{} 等。
     数学环境：$...$、\[…\]、\begin{equation}...\end{equation} 等。
@@ -116,6 +119,7 @@ section_system_prompt_with_dict = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 '''
 
 caption_system_prompt_with_dict = '''
@@ -143,6 +147,7 @@ caption_system_prompt_with_dict = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 '''
 
 env_system_prompt_with_dict = '''
@@ -171,6 +176,7 @@ env_system_prompt_with_dict = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 '''
 
 retrans_error_parts_system_prompt = '''
@@ -199,7 +205,7 @@ retrans_error_parts_system_prompt = '''
     ### LaTeX 翻译与修订规则
 
     1. 仅修改自然语言内容。不要改动 LaTeX 命令、环境、引用、数学表达式或结构标签。
-    2. 翻译或修订 `\section{}`、`\subsection{}` 等章节命令中 `{}` 内的内容，但不要改动命令本身。
+    2. 保留 `\section{}`、`\subsection{}` 等章节命令中 `{}` 内的内容为原文，也不要改动命令本身。
     3. 不要修改：
        - LaTeX 控制命令，如 `\label{}`、`\cite{}`、`\ref{}`、`\textbf{}`、`\emph{}`。
        - 数学环境：`$...$`、`\[...\]`、`\begin{equation}...\end{equation}` 等。
@@ -218,6 +224,7 @@ retrans_error_parts_system_prompt = '''
        - 作为专有名词使用的 benchmark 与指标名称
        - 硬件 / 机器人 / 传感器名称及型号
        - 行内书写的位姿 / 几何符号与记号
+       - 作者在文章中自己新定义的概念
 
     ---
 

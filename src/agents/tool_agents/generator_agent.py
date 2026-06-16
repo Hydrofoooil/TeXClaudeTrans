@@ -89,6 +89,8 @@ class GeneratorAgent(BaseToolAgent):
                             )
         latex_constructor.construct()
 
+        self._inject_arxiv_stamp(transed_latex_dir)
+
         sys.stderr = open(os.devnull, 'w')
         self.progress_bar.progress(80)
         self.status_text.text("🛠️ Compiling PDF document...")
@@ -138,6 +140,70 @@ class GeneratorAgent(BaseToolAgent):
         shutil.copytree(src_dir, dest_dir)
 
         return dest_dir
+
+    def _inject_arxiv_stamp(self, tex_dir: str) -> None:
+        """给重建项目的主 tex 注入 arXiv 左侧竖排戳(序号+分类+日期),模拟 arXiv 发布版。
+        仅当 config['arxiv_stamp'] 为真(默认 True)、且项目名能识别出 arXiv ID(即来自
+        arXiv 翻译)时生效;本地项目无 arXiv 元数据则自动跳过。"""
+        if not self.config.get("arxiv_stamp", True):
+            return
+        import re
+        from src.formats.latex.utils import find_main_tex_file
+
+        base = os.path.basename(self.project_dir)
+        m = re.search(r"(\d{4}\.\d{4,5}(?:v\d+)?)", base)  # 从项目名提取 arXiv ID
+        if not m:
+            return  # 非 arXiv 来源(本地项目),跳过
+        arxiv_id = m.group(1)
+
+        cats = (self.config.get("category") or {}).get(arxiv_id) or []
+        date = (self.config.get("arxiv_date") or {}).get(arxiv_id)
+        parts = [f"arXiv:{arxiv_id}"]
+        if cats:
+            parts.append(f"[{cats[0]}]")
+        if date:
+            parts.append(date)
+        stamp = "  ".join(parts)
+
+        # 把 \today 固定为 arXiv 提交日期(英文 "February 9, 2026" 形式)，
+        # 避免页脚 "Preprint. \today" 显示"今天"或被 ctex 中文化成"年月日"。
+        # (注：原作者本地编译日不可知，这里用 arXiv 提交日作为最接近的代替。)
+        today_cmd = ""
+        if date:
+            _mon = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+            _full = ["January", "February", "March", "April", "May", "June",
+                     "July", "August", "September", "October", "November", "December"]
+            eng_date = date.strip()
+            dp = eng_date.split()
+            if len(dp) == 3 and dp[1][:3] in _mon:
+                eng_date = "%s %s, %s" % (_full[_mon[dp[1][:3]] - 1], dp[0].lstrip("0"), dp[2])
+            today_cmd = r"\renewcommand{\today}{" + eng_date + "}"
+
+        main_tex = find_main_tex_file(tex_dir)
+        if not main_tex:
+            return
+        try:
+            with open(main_tex, "r", encoding="utf-8") as f:
+                s = f.read()
+            # 用 textpos 绝对定位(独立包,不与 cvpr/iccv 自带的 \LenToUnit/\AddToShipoutPicture 冲突)
+            if "{textpos}" not in s:
+                s = re.sub(r"(\\documentclass[^\n]*\n)", r"\1\\usepackage[absolute,overlay]{textpos}\n", s, count=1)
+            # 2.25 倍、灰色 #808080、字体 Microsoft Himalaya(试) — 注意 Path 硬编码 WSL/Windows，不通用
+            stamp_font = r"\fontspec[Path=/mnt/c/Windows/Fonts/]{himalaya.ttf}"
+            styled = r"\scalebox{2.25}{\textcolor[gray]{0.5}{" + stamp_font + r"\small " + stamp + r"}}"
+            inject = (
+                today_cmd +
+                r"\begin{textblock*}{3cm}[0.5,0.5](2.0cm,0.5\paperheight)"
+                r"\rotatebox[origin=c]{90}{" + styled + r"}"
+                r"\end{textblock*}"
+            )
+            s = s.replace(r"\begin{document}", r"\begin{document}" + "\n" + inject + "\n", 1)
+            with open(main_tex, "w", encoding="utf-8") as f:
+                f.write(s)
+            self.log(f"🏷️ Injected arXiv stamp: {stamp}")
+        except OSError as e:
+            print(f"⚠️ Failed to inject arXiv stamp: {e}")
         
     
 

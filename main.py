@@ -13,6 +13,7 @@ from src.formats.latex.utils import (
     extract_arxiv_ids,
     extract_compressed_files,
     get_arxiv_category,
+    get_arxiv_dates,
     get_profect_dirs,
 )
 
@@ -173,8 +174,9 @@ def main():
 
         if paper_list:
             projects.extend(batch_download_arxiv_tex(paper_list, projects_dir))
-            if not config.get("user_term"):
-                config["category"] = get_arxiv_category(paper_list)
+            config["category"] = get_arxiv_category(paper_list)  # 术语表选择 + arXiv 戳分类共用
+            if config.get("arxiv_stamp", True):
+                config["arxiv_date"] = get_arxiv_dates(paper_list)
             # Keep legacy behavior for downloaded arXiv sources.
             extract_compressed_files(projects_dir)
 

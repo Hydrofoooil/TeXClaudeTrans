@@ -4,7 +4,7 @@
 
 
 
-<img src="./logo.png" width="1000px"></img>
+<img src="./assets/logo.png" width="1000px"></img>
 
   **Turn arXiv Papers into Multilingual Masterpieces**
 #
@@ -178,8 +178,8 @@ streamlit run src/gui/streamlit_app.py
     <td align="center"><b>译文</b></td>
   </tr>
   <tr>
-    <td><img src="examples/case1src.png" width="100%"></td>
-    <td><img src="examples/case1ch.png" width="100%"></td>
+    <td><img src="assets/examples/case1src.png" width="100%"></td>
+    <td><img src="assets/examples/case1ch.png" width="100%"></td>
   </tr>
 </table>
 
@@ -191,8 +191,8 @@ streamlit run src/gui/streamlit_app.py
     <td align="center"><b>译文</b></td>
   </tr>
   <tr>
-    <td><img src="examples/case3src.png" width="100%"></td>
-    <td><img src="examples/case3ch.png" width="100%"></td>
+    <td><img src="assets/examples/case3src.png" width="100%"></td>
+    <td><img src="assets/examples/case3ch.png" width="100%"></td>
   </tr>
 </table>
 
@@ -222,7 +222,7 @@ streamlit run src/gui/streamlit_app.py
   </tr>
 </table>
 
-📂 **更多样例请查看[`examples/`](examples/) 文件夹**, 包含每个样例的完整翻译 PDF。
+📂 **更多样例请查看[`assets/examples/`](assets/examples/) 文件夹**, 包含每个样例的完整翻译 PDF。
 
 ---
 ## 致谢

@@ -9,6 +9,9 @@ category = {}
 update_term = "False"
 mode = 0
 user_term = ""
+# 在译文 PDF 首页左侧加 arXiv 竖排戳(序号+分类+日期),模拟 arXiv 发布版。
+# 仅对从 arXiv ID 翻译的论文生效;本地项目自动跳过。设 false 关闭。
+arxiv_stamp = true
 # Optional: path to a TOML file that overrides the built-in translation prompts.
 # Only the prompt keys you list are replaced; the rest keep their defaults.
 # See config/prompts.example.toml for the available keys and format.

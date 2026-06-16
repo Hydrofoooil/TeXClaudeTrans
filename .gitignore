@@ -19,6 +19,9 @@ outputs/
 # GUI 记住的上次设置（本地状态，不入库）
 config/.gui_state.json
 
+# 项目指令文件（本地保留，不入库）
+/CLAUDE.md
+
 # 杂项
 *.log
 missfont.log

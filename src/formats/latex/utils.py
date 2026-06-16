@@ -862,9 +862,32 @@ def get_arxiv_category(arxiv_ids: List[str]) -> dict:
             categories = []
 
         results[arxiv_id] = (categories)
-        time.sleep(1)  
+        time.sleep(1)
 
     return results
+
+
+def get_arxiv_dates(arxiv_ids: List[str]) -> dict:
+    """从 arxiv.org/abs/<id> 抓取提交日期，返回 {id: '16 Nov 2025'}（取不到为 None）。"""
+    results = {}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    for arxiv_id in arxiv_ids:
+        date = None
+        try:
+            resp = requests.get(f"https://arxiv.org/abs/{arxiv_id}", headers=headers, timeout=10)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            dateline = soup.find("div", class_="dateline")
+            if dateline:
+                m = re.search(r"Submitted on\s+(\d{1,2}\s+\w+\s+\d{4})", dateline.get_text())
+                if m:
+                    date = m.group(1)
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to fetch date for {arxiv_id}: {e}")
+        results[arxiv_id] = date
+        time.sleep(1)
+    return results
+
 
 def is_valid_arxiv_id(id_str):
     # 现代格式：YYYY.NNNNN 或 YYYY.NNNNNNN

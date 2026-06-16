@@ -177,13 +177,14 @@ class CoordinatorAgent:
             new_PDF_path = os.path.join(transed_project_dir, f"{self.target_language}_{base_name}.pdf")
             shutil.move(PDF_file_path, new_PDF_path)
             print(f"🤖🎉 {self.name}: Successfully translated {os.path.basename(self.project_dir)} to {new_PDF_path}.")
-            # 额外在 outputs 根目录存一份，以论文英文标题命名，便于查找
+            # 额外在 outputs 根目录存一份，以"目标语言前缀 + 论文英文标题"命名，便于查找
+            # (与 ch_<项目名> 的命名约定一致，中文即 ch_<标题>.pdf)
             title = _extract_title_for_filename(
                 os.path.join(transed_project_dir, "captions_map.json"),
                 fallback_tex_dir=os.path.join(transed_project_dir, base_name),
             )
             if title:
-                titled_pdf = os.path.join(self.output_dir, f"{title}.pdf")
+                titled_pdf = os.path.join(self.output_dir, f"{self.target_language}_{title}.pdf")
                 try:
                     shutil.copy(new_PDF_path, titled_pdf)
                     print(f"🤖📄 {self.name}: Also saved as {titled_pdf}.")

@@ -564,10 +564,20 @@ def add_xecjk_package(latex_code):
     自带的 fandol(与 ctex 默认一致)。"""
     if "xeCJK" in latex_code or "\\usepackage[UTF8]{ctex}" in latex_code:
         return latex_code
+    # 中文“加粗字体/无衬线字体”：优先用加粗版华文中宋(STZhongsong)。该字体只在
+    # Windows 字体目录里、且无现成加粗字重，故用 FakeBold 合成加粗。检测到才用，
+    # 否则回退到 texlive 自带的 FandolHei(黑体)——保证非 WSL/无该字体的机器也能编译。
+    hwzs_path = "/mnt/c/Windows/Fonts/STZHONGS.TTF"
+    if os.path.exists(hwzs_path):
+        bold_spec = "BoldFont={%s},BoldFeatures={FakeBold=3}" % hwzs_path
+        sans_line = "\\setCJKsansfont{%s}[BoldFont={%s},BoldFeatures={FakeBold=3}]\n" % (hwzs_path, hwzs_path)
+    else:
+        bold_spec = "BoldFont=FandolHei-Regular.otf"
+        sans_line = "\\setCJKsansfont{FandolHei-Regular.otf}\n"
     pkg = (
         "\\usepackage{xeCJK}\n"
-        "\\setCJKmainfont{FandolSong-Regular.otf}[BoldFont=FandolHei-Regular.otf,ItalicFont=FandolKai-Regular.otf]\n"
-        "\\setCJKsansfont{FandolHei-Regular.otf}\n"
+        "\\setCJKmainfont{FandolSong-Regular.otf}[" + bold_spec + ",ItalicFont=FandolKai-Regular.otf]\n"
+        + sans_line +
         "\\setCJKmonofont{FandolFang-Regular.otf}\n"
     )
     documentclass_pattern = get_command_pattern(r'documentclass')
@@ -575,6 +585,27 @@ def add_xecjk_package(latex_code):
     if match:
         position = match.end()
         latex_code = latex_code[:position] + "\n" + pkg + latex_code[position:]
+
+    # --- Latin 字体修复(xelatex 下恢复 \textbf / \emph 等) ---
+    # 会议模板内部常用 times/mathptmx 等 Type1 字体包，它们只有 OT1/T1 编码的字体
+    # 定义、没有 Unicode(TU)定义；中文必须用 xelatex(走 TU 编码)，于是模板字体的
+    # 粗体/斜体字形"未定义"而被静默替换为常规体——表现为所有 \textbf 都不加粗。
+    # 在导言区末尾(模板的 times 包之后、\begin{document} 之前)把拉丁正文/无衬线/
+    # 等宽字体改用与 Times/Helvetica/Courier 等宽兼容的 TeX Gyre OpenType 字体，
+    # 既恢复加粗/斜体，又保持与原始 PDF 接近的外观。用文件名引用，kpathsea 可定位。
+    latin_fix = (
+        "% --- Latin font fix for XeLaTeX (restore \\textbf / \\emph) ---\n"
+        "\\setmainfont{texgyretermes-regular.otf}[BoldFont=texgyretermes-bold.otf,"
+        "ItalicFont=texgyretermes-italic.otf,BoldItalicFont=texgyretermes-bolditalic.otf]\n"
+        "\\setsansfont{texgyreheros-regular.otf}[BoldFont=texgyreheros-bold.otf,"
+        "ItalicFont=texgyreheros-italic.otf,BoldItalicFont=texgyreheros-bolditalic.otf]\n"
+        "\\setmonofont{texgyrecursor-regular.otf}[BoldFont=texgyrecursor-bold.otf,"
+        "ItalicFont=texgyrecursor-italic.otf,BoldItalicFont=texgyrecursor-bolditalic.otf]\n"
+    )
+    if "\\begin{document}" in latex_code:
+        latex_code = latex_code.replace(
+            "\\begin{document}", latin_fix + "\\begin{document}", 1
+        )
     return latex_code
 
 def add_ja_package(latex_code):

@@ -31,9 +31,18 @@ class LaTexCompiler:
             "-f",
         ]
         if engine in ("xelatex", "lualatex"):
-            # 有些文档假设用 pdflatex（如 \input glyphtounicode 会调用 \pdfglyphtounicode）。
-            # 这些 pdftex 专有命令在 xelatex 下未定义会报错；用 pretex 注入 no-op 垫片跳过它们。
-            cmd.append(r"-usepretex=\providecommand\pdfglyphtounicode[2]{}")
+            # 有些包(如 axessibility.sty)假设用 pdflatex，无条件使用 pdftex 专有命令
+            # (\pdfcompresslevel / \pdfgentounicode / \pdfglyphtounicode 等)。xelatex 下这些
+            # 命令未定义，赋值右值(=0/=6/=1)会被当正文、在 \begin{document} 前触发排版，
+            # 首页出现 "=0 =6"。用 pretex 预先把它们定义成 no-op/计数器，使包能正常加载。
+            cmd.append(
+                r"-usepretex="
+                r"\providecommand\pdfglyphtounicode[2]{}"
+                r"\providecommand\pdfcatalog[1]{}"
+                r"\ifdefined\pdfcompresslevel\else\newcount\pdfcompresslevel\fi"
+                r"\ifdefined\pdfoptionpdfminorversion\else\newcount\pdfoptionpdfminorversion\fi"
+                r"\ifdefined\pdfgentounicode\else\newcount\pdfgentounicode\fi"
+            )
         cmd.append(tex_file)
         cwd = os.path.dirname(tex_file)
         try:
